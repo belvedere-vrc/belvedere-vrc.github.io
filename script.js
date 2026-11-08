@@ -84,41 +84,53 @@ function renderVideos(list) {
       item.appendChild(h);
     }
 
-    const frame = document.createElement("div");
-    frame.className = "video-frame";
-    const id = youtubeId(v.url);
-    if (id) {
-      const iframe = document.createElement("iframe");
-      iframe.src = "https://www.youtube-nocookie.com/embed/" + id;
-      iframe.title = v.title || "イベント紹介動画";
-      iframe.allow = "accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen";
-      iframe.allowFullscreen = true;
-      iframe.loading = "lazy";
-      iframe.referrerPolicy = "strict-origin-when-cross-origin";
-      frame.appendChild(iframe);
-    } else {
-      // YouTube以外のURLは埋め込まず、リンクで開く。
-      const a = document.createElement("a");
-      a.className = "btn";
-      a.href = v.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = "動画を見る";
-      frame.classList.add("link-only");
-      frame.appendChild(a);
-    }
-    item.appendChild(frame);
+    item.appendChild(buildVideoFrame(v.url, v.title || "イベント紹介動画"));
     box.appendChild(item);
   });
 }
 
+// 動画1本分の枠。YouTubeは埋め込み、それ以外のURLはリンクボタンにする。
+function buildVideoFrame(url, title) {
+  const frame = document.createElement("div");
+  frame.className = "video-frame";
+  const id = youtubeId(url);
+  if (id) {
+    const iframe = document.createElement("iframe");
+    iframe.src = "https://www.youtube-nocookie.com/embed/" + id;
+    iframe.title = title;
+    iframe.allow = "accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen";
+    iframe.allowFullscreen = true;
+    iframe.loading = "lazy";
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    frame.appendChild(iframe);
+  } else {
+    const a = document.createElement("a");
+    a.className = "btn";
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = "動画を見る";
+    frame.classList.add("link-only");
+    frame.appendChild(a);
+  }
+  return frame;
+}
+
+// キャストの識別子。シートの id 列が空のときは、並び順の番号("c1", "c2", …)。
+// GAS側(publish.gs の readCast_)と同じ規則にしてある。
+function castId(c, i) {
+  return c.id || "c" + (i + 1);
+}
+
+// キャスト一覧。カード全体が詳細ページへのリンクになる。
 function renderCast(list) {
   const grid = document.getElementById("cast-grid");
   if (!grid || !Array.isArray(list) || list.length === 0) return;
   grid.textContent = "";
-  list.forEach((c) => {
-    const card = document.createElement("article");
+  list.forEach((c, i) => {
+    const card = document.createElement("a");
     card.className = "cast-card";
+    card.href = "cast-detail.html?id=" + encodeURIComponent(castId(c, i));
 
     const photo = document.createElement("div");
     photo.className = "photo";
@@ -135,16 +147,111 @@ function renderCast(list) {
       p.textContent = c.catch;
       card.appendChild(p);
     }
-    if (c.link && isSafeUrl(c.link)) {
-      const a = document.createElement("a");
-      a.href = c.link;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = "SNS";
-      card.appendChild(a);
-    }
+    const more = document.createElement("span");
+    more.className = "more";
+    more.textContent = "View more";
+    card.appendChild(more);
     grid.appendChild(card);
   });
+}
+
+// 写真を拡大して見せる(ダイアログ)。ダイアログに未対応のブラウザでは、画像を別タブで開く。
+function openLightbox(src, alt) {
+  let dlg = document.getElementById("lightbox");
+  if (!dlg) {
+    dlg = document.createElement("dialog");
+    dlg.id = "lightbox";
+    const img = document.createElement("img");
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "lightbox-close";
+    close.textContent = "閉じる";
+    close.addEventListener("click", () => dlg.close());
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });  // 外側をクリックしても閉じる
+    dlg.append(img, close);
+    document.body.appendChild(dlg);
+  }
+  if (typeof dlg.showModal !== "function") {
+    window.open(src, "_blank", "noopener");
+    return;
+  }
+  const img = dlg.querySelector("img");
+  img.src = src;
+  img.alt = alt || "";
+  dlg.showModal();
+}
+
+function buildPhoto(src, alt, className) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = className;
+  btn.setAttribute("aria-label", (alt || "写真") + "を拡大する");
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = alt || "";
+  img.loading = "lazy";
+  btn.appendChild(img);
+  btn.addEventListener("click", () => openLightbox(src, alt));
+  return btn;
+}
+
+// キャスト詳細。cast-detail.html?id=… の id に合うキャストを cast.json から探して表示する。
+function renderCastDetail(list) {
+  const status = document.getElementById("detail-status");
+  if (!status || !Array.isArray(list)) return;
+  const id = new URLSearchParams(location.search).get("id");
+  const idx = list.findIndex((c, i) => castId(c, i) === id);
+  if (idx < 0) {
+    status.textContent = "キャストが見つかりませんでした。一覧からお選びください。";
+    return;
+  }
+  const c = list[idx];
+  const name = c.name || "";
+
+  document.getElementById("detail-name").textContent = name;
+  document.title = name + " | " + document.title;
+  status.remove();
+
+  const main = document.getElementById("detail-main");
+  main.hidden = false;
+
+  const photo = document.getElementById("detail-photo");
+  if (c.image && isSafeUrl(c.image)) photo.appendChild(buildPhoto(encodeURI(c.image), name, "detail-photo-btn"));
+  else {
+    photo.classList.add("no-image");
+    photo.textContent = "NO IMAGE";
+  }
+
+  const catchEl = document.getElementById("detail-catch");
+  if (c.catch) catchEl.textContent = c.catch;
+  else catchEl.remove();
+
+  const profile = document.getElementById("detail-profile");
+  if (c.profile) profile.textContent = c.profile;   // 改行はCSS(white-space: pre-line)でそのまま出す
+  else profile.remove();
+
+  const link = document.getElementById("detail-link");
+  if (c.link && isSafeUrl(c.link)) link.href = c.link;
+  else link.remove();
+
+  const photos = (Array.isArray(c.photos) ? c.photos : []).filter((p) => p && isSafeUrl(p));
+  if (photos.length > 0) {
+    const grid = document.getElementById("photo-grid");
+    photos.forEach((p) => grid.appendChild(buildPhoto(encodeURI(p), name, "thumb")));
+    document.getElementById("detail-photos").hidden = false;
+  }
+
+  const videos = (Array.isArray(c.videos) ? c.videos : []).filter((v) => v && isSafeUrl(v));
+  if (videos.length > 0) {
+    const box = document.getElementById("detail-video-list");
+    videos.forEach((v) => {
+      const item = document.createElement("div");
+      item.className = "video-item";
+      item.appendChild(buildVideoFrame(v, name + "の動画"));
+      box.appendChild(item);
+    });
+    document.getElementById("detail-videos").hidden = false;
+  }
 }
 
 loadJson("data/next.json")
@@ -160,4 +267,13 @@ if (document.getElementById("video-list")) {
 
 if (document.getElementById("cast-grid")) {
   loadJson("data/cast.json").then(renderCast).catch(() => {});
+}
+
+if (document.getElementById("detail-status")) {
+  loadJson("data/cast.json")
+    .then(renderCastDetail)
+    .catch(() => {
+      const s = document.getElementById("detail-status");
+      if (s) s.textContent = "読み込めませんでした。時間をおいて、もう一度お試しください。";
+    });
 }

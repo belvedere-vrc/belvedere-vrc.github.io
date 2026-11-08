@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>キャスト紹介 | HOTEL（仮）</title>
+<meta name="description" content="おもてなしをするキャストの詳細。">
+<!-- 準備中の間は検索に出さない。内容が固まったら、次の1行を削除する -->
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Shippori+Mincho:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<p class="proto-banner">ただいま準備中です ／ 内容は順次お知らせします</p>
+
+<header class="site-header">
+  <a class="logo" href="index.html">HOTEL<span>（仮）</span></a>
+  <nav>
+    <a href="event.html">Event</a>
+    <a href="cast.html" aria-current="page">Cast</a>
+    <a href="index.html#faq">FAQ</a>
+    <a class="btn btn-small" href="index.html#entry">お申し込み</a>
+  </nav>
+</header>
+
+<main id="top">
+
+  <section class="page-title">
+    <p class="eyebrow">CAST</p>
+    <h1 id="detail-name">キャスト紹介</h1>
+  </section>
+
+  <!-- 中身は script.js が data/cast.json から埋める。読み込めないときは、下の文言が残る -->
+  <section id="cast-detail">
+    <p class="muted" id="detail-status">読み込み中です…</p>
+    <div class="detail-main" id="detail-main" hidden>
+      <div class="detail-photo" id="detail-photo"></div>
+      <div class="detail-text">
+        <p class="detail-catch" id="detail-catch"></p>
+        <p class="detail-profile" id="detail-profile"></p>
+        <p><a class="btn btn-small" id="detail-link" target="_blank" rel="noopener noreferrer">SNS</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="detail-photos" hidden>
+    <h2><span class="en">PHOTO</span>写真</h2>
+    <div class="photo-grid" id="photo-grid"></div>
+  </section>
+
+  <section id="detail-videos" hidden>
+    <h2><span class="en">VIDEO</span>動画</h2>
+    <div id="detail-video-list"></div>
+  </section>
+
+  <section class="center back-row">
+    <a class="btn btn-ghost" href="cast.html">キャスト一覧へ戻る</a>
+  </section>
+
+  <section class="entry">
+    <h2><span class="en">ENTRY</span>お申し込み・アンケート</h2>
+    <div class="cta-row">
+      <a class="btn" data-link="entry" data-ready="イベントに申し込む" href="index.html#entry" aria-disabled="true">イベント申し込み（準備中）</a>
+      <a class="btn btn-ghost" data-link="survey" data-ready="アンケートに回答する" href="index.html#entry" aria-disabled="true">イベントアンケート（準備中）</a>
+    </div>
+    <p class="provisional" data-role="entry-pending">リンクは準備ができ次第、掲載します。</p>
+  </section>
+
+</main>
+
+<footer>
+  <p class="logo">HOTEL<span>（仮）</span></p>
+  <p class="foot-nav"><a href="event.html">Event</a><a href="cast.html">Cast</a><a href="index.html#faq">FAQ</a></p>
+  <p class="small">© HOTEL（仮） 運営事務局</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
