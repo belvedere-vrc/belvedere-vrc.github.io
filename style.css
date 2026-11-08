@@ -215,6 +215,28 @@ td:first-child, th:first-child { text-align: left; }
 .thumb:hover img { opacity: .85; }
 .back-row { padding: 40px 0; }
 
+/* 出勤予定のカレンダー。日付のマスの中に、接客できる時間帯を書く */
+.calendar { max-width: 760px; margin: 0 auto; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.cal-title { font-family: var(--serif); font-size: 20px; letter-spacing: .15em; color: var(--accent-bright); }
+button.btn { cursor: pointer; font-size: 14px; }
+button.btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line);
+  box-shadow: var(--lift); }
+.cal-week { padding: 8px 0; text-align: center; font-family: var(--serif); font-size: 13px; letter-spacing: .1em; color: var(--accent); background: var(--bg-raised); }
+.cal-week.sun { color: #d9a3a0; }
+.cal-week.sat { color: #a3bbd9; }
+.cal-day { min-height: 92px; padding: 6px 6px 8px; background: var(--surface); text-align: left; overflow: hidden; }
+.cal-day.blank { background: var(--bg); }
+.cal-day .d { display: block; font-family: var(--serif); font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+.cal-day .t { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--accent-bright); overflow-wrap: anywhere; }
+.cal-day.has-entry { background: var(--bg-raised); box-shadow: inset 3px 0 0 var(--accent); }
+.cal-day.has-entry .d { color: var(--accent-bright); }
+.cal-day.today .d { color: var(--accent-bright); display: inline-block; min-width: 1.8em; line-height: 1.7; text-align: center; border: 1px solid var(--accent-bright); border-radius: 50%; }
+.cal-day.past { opacity: .45; }
+.cal-list { display: none; margin: 16px 0 0; padding: 0; list-style: none; }
+.cal-list li { padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--accent-bright); }
+
 dialog#lightbox { max-width: 96vw; max-height: 96vh; padding: 0; border: 0; background: transparent; overflow: visible; }
 dialog#lightbox::backdrop { background: rgba(0, 0, 0, .88); }
 dialog#lightbox img { display: block; max-width: 96vw; max-height: 86vh; margin: 0 auto; box-shadow: 0 8px 40px rgba(0, 0, 0, .8); }
@@ -265,5 +287,11 @@ footer .small { color: var(--muted); font-size: 12px; }
   .site-header nav a:not(.btn) { display: none; }
   section { padding: 56px 0; }
   .photo-grid { --row-h: 170px; gap: 8px; }
+  /* スマホ: マスの中の文字は出さず(狭くて読めない)、マスに印を付けて、下に一覧を出す */
+  .cal-day { min-height: 46px; padding: 4px; }
+  .cal-day .t { display: none; }
+  .cal-day.has-entry { background: var(--bg-raised); box-shadow: inset 0 -3px 0 var(--accent); }
+  .cal-list { display: block; }
+  .cal-title { font-size: 17px; letter-spacing: .08em; }
   .hero { padding: 80px 0 64px; }
 }
