@@ -204,7 +204,13 @@ td:first-child, th:first-child { text-align: left; }
 .detail-catch { margin: 0 0 20px; font-family: var(--serif); font-size: 20px; letter-spacing: .08em; color: var(--accent-bright); }
 .detail-links { display: flex; flex-wrap: wrap; gap: 12px; }
 .detail-profile { margin: 0 0 24px; white-space: pre-line; line-height: 1.9; }
-.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+/* 写真の欄: 切り取らず、元の縦横比のまま、行ごとに高さをそろえて並べる。
+   各写真の縦横比(--r)は、読み込み後に script.js が入れる */
+.photo-grid { --row-h: 260px; display: flex; flex-wrap: wrap; gap: 12px; }
+.photo-grid::after { content: ""; flex-grow: 100; }   /* 最後の行が間延びしないように */
+.photo-grid .gallery-item { --r: 1.5; width: auto; height: auto; aspect-ratio: var(--r); flex: var(--r) 1 calc(var(--r) * var(--row-h)); min-width: 0;
+  max-width: calc(var(--r) * var(--row-h) * 1.6); }   /* 1枚だけの行が大きくなりすぎないように */
+.photo-grid .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
 .thumb { aspect-ratio: 3 / 4; border: 1px solid; border-image: var(--edge) 1; box-shadow: var(--lift); overflow: hidden; }
 .thumb:hover img { opacity: .85; }
 .back-row { padding: 40px 0; }
@@ -258,5 +264,6 @@ footer .small { color: var(--muted); font-size: 12px; }
   .site-header { padding: 10px 16px; }
   .site-header nav a:not(.btn) { display: none; }
   section { padding: 56px 0; }
+  .photo-grid { --row-h: 170px; gap: 8px; }
   .hero { padding: 80px 0 64px; }
 }

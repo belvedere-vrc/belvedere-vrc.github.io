@@ -280,7 +280,17 @@ function renderCastDetail(list) {
     .filter((p, i, all) => p && isSafeUrl(p) && p !== c.image && all.indexOf(p) === i);
   if (photos.length > 0) {
     const grid = document.getElementById("photo-grid");
-    photos.forEach((p) => grid.appendChild(buildPhoto(encodeURI(p), name, "thumb")));
+    photos.forEach((p) => {
+      const item = buildPhoto(encodeURI(p), name, "thumb gallery-item");
+      const img = item.querySelector("img");
+      // 読み込めたら、写真の縦横比を入れる(切り取らずに並べるため)
+      const fit = () => {
+        if (img.naturalWidth && img.naturalHeight) item.style.setProperty("--r", String(img.naturalWidth / img.naturalHeight));
+      };
+      if (img.complete) fit();
+      else img.addEventListener("load", fit);
+      grid.appendChild(item);
+    });
     document.getElementById("detail-photos").hidden = false;
   }
 }
