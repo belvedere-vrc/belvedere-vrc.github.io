@@ -202,6 +202,7 @@ td:first-child, th:first-child { text-align: left; }
 .thumb { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; width: 100%; height: 100%; }
 .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .detail-catch { margin: 0 0 20px; font-family: var(--serif); font-size: 20px; letter-spacing: .08em; color: var(--accent-bright); }
+.detail-links { display: flex; flex-wrap: wrap; gap: 12px; }
 .detail-profile { margin: 0 0 24px; white-space: pre-line; line-height: 1.9; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
 .thumb { aspect-ratio: 3 / 4; border: 1px solid; border-image: var(--edge) 1; box-shadow: var(--lift); overflow: hidden; }

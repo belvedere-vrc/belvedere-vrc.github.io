@@ -195,6 +195,23 @@ function buildPhoto(src, alt, className) {
   return btn;
 }
 
+// リンクボタンの文字。表示名が書かれていないときは、URLのサイト名から付ける。
+const LINK_LABELS = {
+  "x.com": "X", "twitter.com": "X", "instagram.com": "Instagram", "youtube.com": "YouTube", "youtu.be": "YouTube",
+  "twitch.tv": "Twitch", "tiktok.com": "TikTok", "booth.pm": "BOOTH", "pixiv.net": "pixiv", "fanbox.cc": "FANBOX",
+  "note.com": "note", "bsky.app": "Bluesky", "discord.gg": "Discord", "discord.com": "Discord", "vrchat.com": "VRChat",
+};
+
+function linkLabel(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    for (const d in LINK_LABELS) {
+      if (host === d || host.endsWith("." + d)) return LINK_LABELS[d];
+    }
+  } catch (e) {}
+  return "リンク";
+}
+
 // キャスト詳細。cast-detail.html?id=… の id に合うキャストを cast.json から探して表示する。
 function renderCastDetail(list) {
   const status = document.getElementById("detail-status");
@@ -237,11 +254,22 @@ function renderCastDetail(list) {
   if (c.profile) profile.textContent = c.profile;   // 改行はCSS(white-space: pre-line)でそのまま出す
   else profile.remove();
 
-  const link = document.getElementById("detail-link");
-  if (c.link && isSafeUrl(c.link)) link.href = c.link;
-  else link.remove();
+  // リンクは複数。links は [{label, url}]。古い形式(link に1つだけ)も読む。
+  const links = (Array.isArray(c.links) ? c.links : c.link ? [{ label: "", url: c.link }] : [])
+    .filter((l) => l && l.url && isSafeUrl(l.url));
+  const linkBox = document.getElementById("detail-links");
+  links.forEach((l) => {
+    const a = document.createElement("a");
+    a.className = "btn btn-small";
+    a.href = l.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = l.label || linkLabel(l.url);
+    linkBox.appendChild(a);
+  });
+  if (links.length === 0) linkBox.remove();
 
-  if (c.catch || c.profile || (c.link && isSafeUrl(c.link))) {
+  if (c.catch || c.profile || links.length > 0) {
     document.getElementById("detail-main").hidden = false;
   } else {
     document.getElementById("cast-detail").remove();   // 何も出すものが無いときは、余白ごと消す
