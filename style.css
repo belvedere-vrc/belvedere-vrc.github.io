@@ -192,11 +192,15 @@ td:first-child, th:first-child { text-align: left; }
 .cast-card p { margin: 0 12px; color: var(--muted); font-size: 14px; line-height: 1.6; }
 
 /* キャスト詳細 */
-.detail-main { display: grid; grid-template-columns: minmax(0, 360px) 1fr; gap: 40px; align-items: start; }
-.detail-photo { aspect-ratio: 3 / 4; background: var(--surface); border: 1px solid; border-image: var(--edge) 1; box-shadow: var(--lift);
-  display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; overflow: hidden; }
-.detail-photo button, .thumb { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; width: 100%; height: 100%; }
-.detail-photo img, .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* 上から 名前 → 動画 → 自己紹介 → リンク → 写真。文章と動画は読みやすい幅に絞って中央に置く */
+#detail-hero, #detail-videos, #cast-detail { border-bottom: 0; }
+#detail-hero { padding: 8px 0 32px; }
+.thumb.hero-photo { max-width: 360px; height: auto; margin: 0 auto; }
+#detail-videos { padding: 8px 0 24px; }
+#cast-detail { padding: 24px 0 56px; }
+.detail-narrow { max-width: 720px; margin: 0 auto; }
+.thumb { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; width: 100%; height: 100%; }
+.thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .detail-catch { margin: 0 0 20px; font-family: var(--serif); font-size: 20px; letter-spacing: .08em; color: var(--accent-bright); }
 .detail-profile { margin: 0 0 24px; white-space: pre-line; line-height: 1.9; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
@@ -254,6 +258,4 @@ footer .small { color: var(--muted); font-size: 12px; }
   .site-header nav a:not(.btn) { display: none; }
   section { padding: 56px 0; }
   .hero { padding: 80px 0 64px; }
-  .detail-main { grid-template-columns: 1fr; gap: 24px; }
-  .detail-photo { max-width: 360px; margin: 0 auto; width: 100%; }
 }

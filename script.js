@@ -211,15 +211,22 @@ function renderCastDetail(list) {
   document.getElementById("detail-name").textContent = name;
   document.title = name + " | " + document.title;
   status.remove();
+  // ページの並び順は、名前 → 代表写真 → 動画(見出しなし) → 自己紹介文 → リンク → 写真
+  if (c.image && isSafeUrl(c.image)) {
+    document.getElementById("detail-hero-photo").appendChild(buildPhoto(encodeURI(c.image), name, "thumb hero-photo"));
+    document.getElementById("detail-hero").hidden = false;
+  }
 
-  const main = document.getElementById("detail-main");
-  main.hidden = false;
-
-  const photo = document.getElementById("detail-photo");
-  if (c.image && isSafeUrl(c.image)) photo.appendChild(buildPhoto(encodeURI(c.image), name, "detail-photo-btn"));
-  else {
-    photo.classList.add("no-image");
-    photo.textContent = "NO IMAGE";
+  const videos = (Array.isArray(c.videos) ? c.videos : []).filter((v) => v && isSafeUrl(v));
+  if (videos.length > 0) {
+    const box = document.getElementById("detail-video-list");
+    videos.forEach((v) => {
+      const item = document.createElement("div");
+      item.className = "video-item";
+      item.appendChild(buildVideoFrame(v, name + "の動画"));
+      box.appendChild(item);
+    });
+    document.getElementById("detail-videos").hidden = false;
   }
 
   const catchEl = document.getElementById("detail-catch");
@@ -234,23 +241,19 @@ function renderCastDetail(list) {
   if (c.link && isSafeUrl(c.link)) link.href = c.link;
   else link.remove();
 
-  const photos = (Array.isArray(c.photos) ? c.photos : []).filter((p) => p && isSafeUrl(p));
+  if (c.catch || c.profile || (c.link && isSafeUrl(c.link))) {
+    document.getElementById("detail-main").hidden = false;
+  } else {
+    document.getElementById("cast-detail").remove();   // 何も出すものが無いときは、余白ごと消す
+  }
+
+  // 写真の欄は photos 列の写真。代表写真は上に出しているので、同じものは重ねて出さない。
+  const photos = (Array.isArray(c.photos) ? c.photos : [])
+    .filter((p, i, all) => p && isSafeUrl(p) && p !== c.image && all.indexOf(p) === i);
   if (photos.length > 0) {
     const grid = document.getElementById("photo-grid");
     photos.forEach((p) => grid.appendChild(buildPhoto(encodeURI(p), name, "thumb")));
     document.getElementById("detail-photos").hidden = false;
-  }
-
-  const videos = (Array.isArray(c.videos) ? c.videos : []).filter((v) => v && isSafeUrl(v));
-  if (videos.length > 0) {
-    const box = document.getElementById("detail-video-list");
-    videos.forEach((v) => {
-      const item = document.createElement("div");
-      item.className = "video-item";
-      item.appendChild(buildVideoFrame(v, name + "の動画"));
-      box.appendChild(item);
-    });
-    document.getElementById("detail-videos").hidden = false;
   }
 }
 

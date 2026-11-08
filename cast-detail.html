@@ -33,27 +33,28 @@
     <h1 id="detail-name">キャスト紹介</h1>
   </section>
 
+  <!-- 並び順: 名前(上のタイトル) → 代表写真 → 動画(見出しなし) → 自己紹介文 → リンク → 写真 -->
   <!-- 中身は script.js が data/cast.json から埋める。読み込めないときは、下の文言が残る -->
+  <section id="detail-hero" hidden>
+    <div class="detail-narrow" id="detail-hero-photo"></div>
+  </section>
+
+  <section id="detail-videos" hidden>
+    <div class="detail-narrow" id="detail-video-list"></div>
+  </section>
+
   <section id="cast-detail">
     <p class="muted" id="detail-status">読み込み中です…</p>
-    <div class="detail-main" id="detail-main" hidden>
-      <div class="detail-photo" id="detail-photo"></div>
-      <div class="detail-text">
-        <p class="detail-catch" id="detail-catch"></p>
-        <p class="detail-profile" id="detail-profile"></p>
-        <p><a class="btn btn-small" id="detail-link" target="_blank" rel="noopener noreferrer">SNS</a></p>
-      </div>
+    <div class="detail-narrow detail-text" id="detail-main" hidden>
+      <p class="detail-catch" id="detail-catch"></p>
+      <p class="detail-profile" id="detail-profile"></p>
+      <p><a class="btn btn-small" id="detail-link" target="_blank" rel="noopener noreferrer">SNS</a></p>
     </div>
   </section>
 
   <section id="detail-photos" hidden>
     <h2><span class="en">PHOTO</span>写真</h2>
     <div class="photo-grid" id="photo-grid"></div>
-  </section>
-
-  <section id="detail-videos" hidden>
-    <h2><span class="en">VIDEO</span>動画</h2>
-    <div id="detail-video-list"></div>
   </section>
 
   <section class="center back-row">
