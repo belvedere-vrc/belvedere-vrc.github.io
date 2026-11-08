@@ -299,6 +299,18 @@ function renderCastDetail(list, schedule) {
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+// 時間帯を、開始時刻の早い順に並べる。時刻が読めないもの(「出勤」など)は最後。同じ開始時刻は、書いた順。
+function sortTimes(times) {
+  const start = (t) => {
+    const m = String(t).match(/(\d{1,2})\s*[:：時]\s*(\d{2})?/);
+    return m ? Number(m[1]) * 60 + Number(m[2] || 0) : Infinity;
+  };
+  return times
+    .map((t, i) => ({ t, s: start(t), i }))
+    .sort((a, b) => (a.s === b.s ? a.i - b.i : a.s < b.s ? -1 : 1))
+    .map((x) => x.t);
+}
 const pad2 = (n) => String(n).padStart(2, "0");
 
 // 出勤予定のカレンダー。日付のマスの中に、接客できる時間帯を書く。前の月・次の月へ切り替えられる。
@@ -378,7 +390,7 @@ function renderSchedule(days) {
     list.className = "cal-list";
     for (let d = 1; d <= lastDay; d++) {
       const date = key + "-" + pad2(d);
-      const times = Array.isArray(days[date]) ? days[date] : [];
+      const times = Array.isArray(days[date]) ? sortTimes(days[date]) : [];
       const cell = document.createElement("div");
       cell.className = "cal-day" + (times.length ? " has-entry" : "") + (date === today ? " today" : "") + (date < today ? " past" : "");
       const num = document.createElement("span");
