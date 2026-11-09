@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>お申し込み | Belvedere（仮）</title>
+<meta name="description" content="イベントのお申し込み。">
+<!-- 準備中の間は検索に出さない。内容が固まったら、次の1行を削除する -->
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Shippori+Mincho:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<p class="proto-banner">ただいま準備中です ／ 内容は順次お知らせします</p>
+
+<header class="site-header">
+  <a class="logo" href="index.html">BELVEDERE<span>（仮）</span></a>
+  <nav>
+    <a href="event.html">Event</a>
+    <a href="cast.html">Cast</a>
+    <a href="index.html#faq">FAQ</a>
+    <a class="btn btn-small" href="apply.html" aria-current="page">お申し込み</a>
+  </nav>
+</header>
+
+<main id="top">
+
+  <section class="page-title">
+    <p class="eyebrow">ENTRY</p>
+    <h1>お申し込み</h1>
+  </section>
+
+  <section class="apply-section">
+    <!-- 中身は apply.js が組み立てる。読み込めないときは、下の文言が残る -->
+    <div id="apply" class="apply">
+      <p class="muted">読み込み中です…</p>
+    </div>
+    <noscript><p class="muted">お申し込みには、JavaScriptを有効にしてください。</p></noscript>
+  </section>
+
+  <!-- 広告の枠。申し込みの操作の邪魔にならないよう、入力欄の下に置く。data/ads.json に、この場所(apply)の広告があるときだけ出る -->
+  <aside class="ad-slot ad-slot-apply" data-ad="apply" hidden></aside>
+
+</main>
+
+<footer>
+  <p class="logo">BELVEDERE<span>（仮）</span></p>
+  <p class="foot-nav"><a href="event.html">Event</a><a href="cast.html">Cast</a><a href="index.html#faq">FAQ</a></p>
+  <p class="small">© Belvedere（仮） 運営事務局</p>
+</footer>
+
+<script src="script.js"></script>
+<script src="apply-config.js"></script>
+<script src="apply.js"></script>
+</body>
+</html>

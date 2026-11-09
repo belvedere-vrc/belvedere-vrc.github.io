@@ -56,8 +56,11 @@ function renderLinks(data) {
     const url = urls[key];
     if (!url || !isSafeUrl(url)) return;
     a.href = url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
+    // 別のサイトのURLは別タブで開く。サイト内のページ(apply.html など)は、そのまま開く。
+    if (/^https?:\/\//i.test(url)) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
     a.textContent = a.dataset.ready;
     a.removeAttribute("aria-disabled");
     ready[key] = true;
@@ -65,6 +68,45 @@ function renderLinks(data) {
   if (ready.entry && ready.survey) {
     document.querySelectorAll('[data-role="entry-pending"]').forEach((el) => el.remove());
   }
+
+  // ヘッダーなどの「お申し込み」ボタンは、申し込みのURLが入ったら、申し込み欄を経由せず、直接そこへつなぐ。
+  document.querySelectorAll("[data-entry-nav]").forEach((a) => {
+    const url = urls.entry;
+    if (!url || !isSafeUrl(url)) return;
+    a.href = url;
+    if (/^https?:\/\//i.test(url)) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+  });
+}
+
+// 営業日の一覧 [{ date: "2026-12-05", type: "通常" | "時間外", start: "21:00"(あるときだけ) }](日付の古い順)。
+// data/days.json(営業日時シート)を使う。無いときは、次回開催の日付(data/next.json の date)を「通常」の1日として使う。
+function businessDays(days, next) {
+  let list = (Array.isArray(days) ? days : [])
+    .filter((d) => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date))
+    .map((d) => {
+      const day = { date: d.date, type: d.type === "時間外" ? "時間外" : "通常" };
+      if (/^\d{1,2}:\d{2}$/.test(String(d.start || ""))) day.start = d.start;
+      return day;
+    });
+  if (list.length === 0 && next && next.date) {
+    const m = String(next.date).match(/(\d{4})\s*[年\/.-]\s*(\d{1,2})\s*[月\/.-]\s*(\d{1,2})/);
+    if (m) list = [{ date: m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2), type: "通常" }];
+  }
+  return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+// 申し込み画面(サイト内の apply.html)へつなぐURL。params で、キャストや日付を最初から選んだ状態で開く。
+// 申し込みのURLが別サイトのフォームなら、事前の選択はできないので、internalOnly のときは空を返す。
+function entryHref(entryUrl, params, internalOnly) {
+  if (!entryUrl || !isSafeUrl(entryUrl)) return "";
+  if (/^https?:\/\//i.test(entryUrl)) return internalOnly ? "" : entryUrl;
+  const q = new URLSearchParams();
+  Object.keys(params || {}).forEach((k) => { if (params[k]) q.set(k, params[k]); });
+  const s = q.toString();
+  return entryUrl + (s ? (entryUrl.includes("?") ? "&" : "?") + s : "");
 }
 
 // 紹介動画は複数本。data/videos.json の [{ title, url }, ...] を上から順に並べる。
@@ -213,7 +255,7 @@ function linkLabel(url) {
 }
 
 // キャスト詳細。cast-detail.html?id=… の id に合うキャストを cast.json から探して表示する。
-function renderCastDetail(list, schedule) {
+function renderCastDetail(list, schedule, next, days) {
   const status = document.getElementById("detail-status");
   if (!status || !Array.isArray(list)) return;
   const id = new URLSearchParams(location.search).get("id");
@@ -269,7 +311,21 @@ function renderCastDetail(list, schedule) {
   });
   if (links.length === 0) linkBox.remove();
 
-  if (c.catch || c.profile || links.length > 0) {
+  // 申し込み(このキャストを指名して)。申し込みのURLが入っているときだけ出す。
+  const cid = castId(c, idx);
+  const entryUrl = next && next.entryUrl;
+  const applyHref = entryHref(entryUrl, { cast: cid });
+  if (applyHref) {
+    const a = document.getElementById("detail-apply");
+    a.href = applyHref;
+    if (/^https?:\/\//i.test(applyHref)) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+    document.getElementById("detail-apply-wrap").hidden = false;
+  }
+
+  if (c.catch || c.profile || links.length > 0 || applyHref) {
     document.getElementById("detail-main").hidden = false;
   } else {
     document.getElementById("cast-detail").remove();   // 何も出すものが無いときは、余白ごと消す
@@ -295,7 +351,10 @@ function renderCastDetail(list, schedule) {
   }
 
   // 出勤予定(カレンダー)。data/schedule.json は { キャストid: { "2026-12-05": ["21:00-23:00", …], … } }
-  renderSchedule(schedule && schedule[castId(c, idx)]);
+  // 予定のある日を押すと、そのキャストと日付を選んだ状態で、申し込み画面を開く
+  // (営業日でない日は、予定として見せるだけで、押せない)
+  const bizDates = new Set(businessDays(days, next).map((d) => d.date));
+  renderSchedule(schedule && schedule[cid], (date) => (bizDates.has(date) ? entryHref(entryUrl, { cast: cid, date }, true) : ""));
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -314,7 +373,7 @@ function sortTimes(times) {
 const pad2 = (n) => String(n).padStart(2, "0");
 
 // 出勤予定のカレンダー。日付のマスの中に、接客できる時間帯を書く。前の月・次の月へ切り替えられる。
-function renderSchedule(days) {
+function renderSchedule(days, hrefFor) {
   const section = document.getElementById("detail-schedule");
   const box = document.getElementById("calendar");
   if (!section || !box || !days || typeof days !== "object") return;
@@ -391,8 +450,14 @@ function renderSchedule(days) {
     for (let d = 1; d <= lastDay; d++) {
       const date = key + "-" + pad2(d);
       const times = Array.isArray(days[date]) ? sortTimes(days[date]) : [];
-      const cell = document.createElement("div");
-      cell.className = "cal-day" + (times.length ? " has-entry" : "") + (date === today ? " today" : "") + (date < today ? " past" : "");
+      // 今日以降の予定のある日は、申し込み画面へのリンクにする(申し込みを受け付けているときだけ)
+      const href = times.length && date >= today && hrefFor ? hrefFor(date) : "";
+      const cell = document.createElement(href ? "a" : "div");
+      if (href) {
+        cell.href = href;
+        cell.setAttribute("aria-label", month + "月" + d + "日で申し込む");
+      }
+      cell.className = "cal-day" + (times.length ? " has-entry" : "") + (href ? " link" : "") + (date === today ? " today" : "") + (date < today ? " past" : "");
       const num = document.createElement("span");
       num.className = "d";
       num.textContent = String(d);
@@ -408,15 +473,71 @@ function renderSchedule(days) {
       if (times.length && date >= today) {
         const li = document.createElement("li");
         const wd = WEEKDAYS[new Date(Date.UTC(year, month - 1, d)).getUTCDay()];
-        li.textContent = month + "/" + d + "(" + wd + ") " + times.join("、");
+        const label = month + "/" + d + "(" + wd + ") " + times.join("、");
+        if (href) {
+          const a = document.createElement("a");
+          a.href = href;
+          a.textContent = label;
+          li.appendChild(a);
+        } else {
+          li.textContent = label;
+        }
         list.appendChild(li);
       }
     }
     box.appendChild(grid);
     if (list.children.length > 0) box.appendChild(list);   // スマホでは、マスの中の文字の代わりに、この一覧を出す
+    if (box.querySelector(".cal-day.link")) {
+      const hint = document.createElement("p");
+      hint.className = "cal-hint";
+      hint.textContent = "予定のある日を押すと、その日でお申し込みできます。";
+      box.appendChild(hint);
+    }
   };
   draw();
   section.hidden = false;
+}
+
+// 広告バナー。data/ads.json は [{ places: ["top"|"cast"|"apply", …], image, url, alt, from, to }]。
+// ページにある枠(data-ad="場所")に、その場所の広告を、シートの上の行から順に入れる(1枠に1つ。広告が足りない枠は出さない)。
+// 掲載期間(from〜to、日本時間の日付)を過ぎた広告は、サイトを更新しなくても出なくなる。
+function renderAds(list) {
+  if (!Array.isArray(list)) return;
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const live = list.filter((a) =>
+    a && Array.isArray(a.places) && a.image && a.url && isSafeUrl(a.image) && isSafeUrl(a.url) &&
+    (!a.from || a.from <= today) && (!a.to || today <= a.to));
+  const used = {};
+  document.querySelectorAll("[data-ad]").forEach((slot) => {
+    const place = slot.dataset.ad;
+    const n = used[place] || 0;
+    used[place] = n + 1;
+    const ad = live.filter((a) => a.places.includes(place))[n];
+    if (!ad) return;
+
+    const link = document.createElement("a");
+    link.className = "ad";
+    link.href = ad.url;
+    if (/^https?:\/\//i.test(ad.url)) {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer sponsored";
+    }
+    const img = document.createElement("img");
+    img.src = encodeURI(ad.image);
+    img.alt = ad.alt || "広告";
+    img.loading = "lazy";
+    const label = document.createElement("span");
+    label.className = "ad-label";
+    label.textContent = "PR";
+    link.append(img, label);
+    slot.textContent = "";
+    slot.appendChild(link);
+    slot.hidden = false;
+  });
+}
+
+if (document.querySelector("[data-ad]")) {
+  loadJson("data/ads.json").then(renderAds).catch(() => {});
 }
 
 loadJson("data/next.json")
@@ -436,8 +557,13 @@ if (document.getElementById("cast-grid")) {
 
 if (document.getElementById("detail-status")) {
   // 出勤予定が読めなくても、キャストの詳細は出す
-  Promise.all([loadJson("data/cast.json"), loadJson("data/schedule.json").catch(() => ({}))])
-    .then(([list, schedule]) => renderCastDetail(list, schedule))
+  Promise.all([
+    loadJson("data/cast.json"),
+    loadJson("data/schedule.json").catch(() => ({})),
+    loadJson("data/next.json").catch(() => ({})),
+    loadJson("data/days.json").catch(() => []),
+  ])
+    .then(([list, schedule, next, days]) => renderCastDetail(list, schedule, next, days))
     .catch(() => {
       const s = document.getElementById("detail-status");
       if (s) s.textContent = "読み込めませんでした。時間をおいて、もう一度お試しください。";

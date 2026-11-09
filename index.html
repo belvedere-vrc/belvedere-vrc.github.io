@@ -22,7 +22,7 @@
     <a href="event.html">Event</a>
     <a href="cast.html">Cast</a>
     <a href="index.html#faq">FAQ</a>
-    <a class="btn btn-small" href="index.html#entry">お申し込み</a>
+    <a class="btn btn-small" href="index.html#entry" data-entry-nav>お申し込み</a>
   </nav>
 </header>
 
@@ -32,7 +32,7 @@
     <p class="eyebrow">WELCOME</p>
     <h1>ようこそ、特別な一夜へ。</h1>
     <p class="lead">Hotel Belvedereを舞台に、キャストがお客様をおもてなしするイベントです。</p>
-    <a class="btn" href="#entry">お申し込みはこちら</a>
+    <a class="btn" href="#entry" data-entry-nav>お申し込みはこちら</a>
   </section>
 
   <section id="next" class="next">
@@ -45,6 +45,9 @@
     <p class="next-note" id="next-note"></p>
     <p class="updated" id="next-updated"></p>
   </section>
+
+  <!-- 広告の枠。data/ads.json に、この場所(top)の広告があるときだけ出る。上から順に、広告シートの上の行から入る -->
+  <aside class="ad-slot" data-ad="top" hidden></aside>
 
   <section id="guide">
     <h2><span class="en">GUIDE</span>ご案内</h2>
@@ -61,6 +64,8 @@
       </a>
     </div>
   </section>
+
+  <aside class="ad-slot" data-ad="top" hidden></aside>
 
   <section id="entry" class="entry">
     <h2><span class="en">ENTRY</span>お申し込み・アンケート</h2>
@@ -79,6 +84,8 @@
     <details><summary>時間は延びますか？</summary><p>キャストの判断で延長される場合があります。追加料金はいただきません。</p></details>
     <details><summary>キャンセルや変更はできますか？</summary><p>規定は準備中です。</p></details>
   </section>
+
+  <aside class="ad-slot" data-ad="top" hidden></aside>
 
   <section id="notes">
     <h2><span class="en">NOTICE</span>ご注意</h2>

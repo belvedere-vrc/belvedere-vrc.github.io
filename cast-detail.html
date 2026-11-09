@@ -22,7 +22,7 @@
     <a href="event.html">Event</a>
     <a href="cast.html" aria-current="page">Cast</a>
     <a href="index.html#faq">FAQ</a>
-    <a class="btn btn-small" href="index.html#entry">お申し込み</a>
+    <a class="btn btn-small" href="index.html#entry" data-entry-nav>お申し込み</a>
   </nav>
 </header>
 
@@ -49,6 +49,7 @@
       <p class="detail-catch" id="detail-catch"></p>
       <p class="detail-profile" id="detail-profile"></p>
       <div class="detail-links" id="detail-links"></div>
+      <p class="detail-apply" id="detail-apply-wrap" hidden><a class="btn" id="detail-apply" href="apply.html">このキャストを指名して申し込む</a></p>
     </div>
   </section>
 
@@ -56,6 +57,9 @@
     <h2><span class="en">PHOTO</span>写真</h2>
     <div class="photo-grid" id="photo-grid"></div>
   </section>
+
+  <!-- 広告の枠。data/ads.json に、この場所(cast)の広告があるときだけ出る -->
+  <aside class="ad-slot" data-ad="cast" hidden></aside>
 
   <section id="detail-schedule" hidden>
     <h2><span class="en">SCHEDULE</span>出勤予定</h2>
