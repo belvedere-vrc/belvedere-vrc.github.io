@@ -93,6 +93,10 @@ h3, summary, .steps b { color: var(--accent-bright); }
 }
 .logo { font-family: var(--latin); font-size: 22px; letter-spacing: .25em; color: var(--accent); margin: 0; }
 .logo span { font-family: var(--serif); font-size: 12px; letter-spacing: 0; margin-left: 4px; }
+/* ロゴ画像(script.js の LOGO)。ヘッダーでは文字のロゴと置き換わり、トップでは大見出しの上に出る */
+.logo-img { display: block; height: 32px; width: auto; max-width: 56vw; }
+.hero-logo { display: block; width: auto; max-width: min(440px, 76%); max-height: 180px; height: auto; margin: 0 auto 28px; filter: drop-shadow(2px 3px 4px rgba(0, 0, 0, .7)); }
+.hero-logo[hidden] { display: none; }
 .site-header nav { display: flex; align-items: center; gap: 20px; font-family: var(--latin); letter-spacing: .12em; }
 .site-header nav a:hover { color: var(--accent-bright); }
 

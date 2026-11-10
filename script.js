@@ -1,6 +1,34 @@
 // 更新内容は data/*.json に書き出された静的ファイルを読むだけ(GASには問い合わせない)。
 // 読み込みに失敗しても、HTML側の「調整中」「準備中」の表示がそのまま残る。
 
+// イベント名のロゴ画像。サイトのフォルダー(index.html と同じ場所)に置いたファイル名を書く(例 "logo.png" / "logo.svg")。
+// 背景が透明な画像を想定。空のあいだと、画像が読み込めないときは、文字のロゴ(BELVEDERE)のまま。
+// 使う場所: 各ページ上部のロゴ(ヘッダー)と、トップページの大見出しの上(index.html の data-logo の画像)。
+const LOGO = "";
+const LOGO_ALT = "Belvedere（仮）";
+
+function applyLogo() {
+  if (!LOGO) return;
+  const probe = new Image();
+  probe.onload = () => {
+    document.querySelectorAll(".site-header .logo").forEach((a) => {
+      const img = document.createElement("img");
+      img.className = "logo-img";
+      img.src = LOGO;
+      img.alt = LOGO_ALT;
+      a.textContent = "";
+      a.appendChild(img);
+    });
+    document.querySelectorAll("img[data-logo]").forEach((img) => {
+      img.src = LOGO;
+      img.alt = LOGO_ALT;
+      img.hidden = false;
+    });
+  };
+  probe.src = LOGO;
+}
+applyLogo();
+
 async function loadJson(path) {
   const res = await fetch(path, { cache: "no-cache" });
   if (!res.ok) throw new Error(path + ": " + res.status);
@@ -95,7 +123,9 @@ function businessDays(days, next) {
     const m = String(next.date).match(/(\d{4})\s*[年\/.-]\s*(\d{1,2})\s*[月\/.-]\s*(\d{1,2})/);
     if (m) list = [{ date: m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2), type: "通常" }];
   }
-  return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  // 同じ日付に、通常営業と時間外の両方があってもよい(通常営業が先)
+  const rank = (d) => (d.type === "時間外" ? 1 : 0);
+  return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : rank(a) - rank(b)));
 }
 
 // 申し込み画面(サイト内の apply.html)へつなぐURL。params で、キャストや日付を最初から選んだ状態で開く。
