@@ -1,7 +1,7 @@
 // お申し込み画面。1問ずつ進む形で入力してもらい、最後に確認して、Googleフォームへ送信する。
 // Googleフォームの画面は出さない。設定は apply-config.js。読み込みに失敗したときは、HTML側の文言が残る。
 //
-// 流れ: 営業日 → 部屋 → 指名の有無 →(指名ありなら)キャスト → 時間帯の枠 → お名前 → VRChatのプロフィールURL → XのプロフィールURL → メールアドレス → 確認 → 送信
+// 流れ: 指名の有無 →(指名ありなら)キャスト → 営業日 → 時間帯の枠 → 部屋 → お名前 → VRChatのプロフィールURL → XのプロフィールURL → メールアドレス → 確認 → 送信
 //  ・営業日は、data/days.json(営業日時シート)。種類が「時間外」の日は、選べる部屋が変わり、手数料の案内が出る。
 //  ・通常営業は、予約に関係なく、固定の開催時刻(設定 regularStart。営業日時シートの start で日ごとに変えることも可)に開催する。
 //    その前後1時間以内の開始は、開始時刻ちょうどを除いて、全員が一律で選べない
@@ -166,14 +166,17 @@
   /* ---------- 流れ ---------- */
   const nominated = () => answers.nominate === "yes";
   const steps = () => {
+    // 最初に、指名の有無とキャストを決める。キャストを先に選ぶので、営業日は、そのキャストが出勤する日だけが出る。
     const s = [];
-    if (!dateLocked) s.push("date");
-    s.push("room");
     if (!castLocked) s.push("nominate");
     if (nominated() && !castLocked) s.push("cast");
-    s.push("slot", "name", "vrchat", "x", "email", "confirm");
+    if (!dateLocked) s.push("date");
+    s.push("slot", "room", "name", "vrchat", "x", "email", "confirm");
     return s;
   };
+  // そのキャストが、今日以降の営業日のどれかで、指名できる(選べる枠が残っている)か
+  const castAnyFree = (castId) => bizDays.some((d) => d.date >= todayIso() && castFree(castId, d.date, d.type));
+  const castAnyWorks = (castId) => bizDays.some((d) => d.date >= todayIso() && castWorks(castId, d.date));
   const planValue = () => (answers.room || "") + (nominated() ? SUFFIX : "");
 
   // 選び直したときに、それに頼っている回答を外す
@@ -189,6 +192,10 @@
       if (value === "no") { delete answers.cast; delete answers.castId; }
     } else if (key === "cast") {
       delete answers.slot;
+      // キャストを選び直したとき、選んである営業日が、そのキャストで選べなければ、営業日から選び直してもらう
+      if (answers.date && !castFree(answers.castId, answers.date, typeOf())) {
+        delete answers.date; delete answers.type; delete answers.room;
+      }
     }
   }
   const roomsFor = (type) => rooms.filter((r) => !Array.isArray(r.types) || r.types.indexOf(type) >= 0);
@@ -227,7 +234,7 @@
       reset.addEventListener("click", () => {
         castLocked = false;
         dateLocked = false;
-        ["date", "room", "nominate", "cast", "castId", "slot"].forEach((k) => delete answers[k]);
+        ["date", "type", "room", "nominate", "cast", "castId", "slot"].forEach((k) => delete answers[k]);
         go(0);
       });
       chip.appendChild(reset);
@@ -518,11 +525,12 @@
       const today = todayIso();
       const options = bizDays
         .filter((d) => d.date >= today)
-        .filter((d) => !castLocked || castFree(answers.castId, d.date, d.type))
+        .filter((d) => !answers.castId || castFree(answers.castId, d.date, d.type))
         .map((d) => ({ value: d.date + "|" + d.type, date: d.date, type: d.type, label: dateLabel(d.date) + (d.type === "時間外" ? "（時間外）" : ""), note: d.type === "時間外" ? "時間外の営業です。" + (cfg.overtimeNote || "") : "" }));
       node = choiceStep("date", "ご希望の営業日をお選びください", dateNote, options, answers.date ? answers.date + "|" + typeOf() : undefined,
         (o) => { answers.type = o.type; setAnswer("date", o.date); },
         castLocked ? answers.cast + "は、お申し込みできる営業日がありません(枠が埋まっています)。「選び直す」から、別のキャストや指名なしをお選びください。"
+          : answers.castId ? answers.cast + "は、お申し込みできる営業日がありません(枠が埋まっています)。「戻る」から、別のキャストや指名なしをお選びください。"
           : "お申し込みできる営業日は、調整中です。決まり次第、受け付けます。");
     } else if (name === "room") {
       const options = roomsFor(typeOf()).map((r) => ({ value: r.value, note: r.note }));
@@ -534,11 +542,12 @@
         { value: "yes", label: "指名する", note: "お好きなキャストを、1人、指名できます。" },
       ], answers.nominate, (o) => setAnswer("nominate", o.value), "");
     } else if (name === "cast") {
+      // 営業日より先に選ぶので、今日以降の営業日のどれかに出勤するキャストを出す(枠がすべて埋まっているキャストは、灰色)
       const options = castList
-        .filter((c) => castWorks(c.id, answers.date))
-        .map((c) => ({ value: c.name, id: c.id, image: c.image, disabled: !hasOpenSlot(answers.date, c.id, typeOf()), note: hasOpenSlot(answers.date, c.id, typeOf()) ? "" : "この日の枠は、埋まっています" }));
-      node = choiceStep("cast", "指名するキャストをお選びください", dateText() + "に出勤するキャストです。", options, answers.cast,
-        (o) => { setAnswer("cast", o.value); answers.castId = o.id; }, "この日に出勤するキャストは、決まり次第、お知らせします。");
+        .filter((c) => castAnyWorks(c.id))
+        .map((c) => ({ value: c.name, id: c.id, image: c.image, disabled: !castAnyFree(c.id), note: castAnyFree(c.id) ? "" : "お申し込みできる枠は、埋まっています" }));
+      node = choiceStep("cast", "指名するキャストをお選びください", "出勤の予定があるキャストです。出勤日は、キャストの紹介ページでもご覧いただけます。", options, answers.cast,
+        (o) => { answers.castId = o.id; setAnswer("cast", o.value); }, "出勤するキャストは、決まり次第、お知らせします。");
     } else if (name === "slot") {
       node = slotStep();
     } else if (name === "name") {
