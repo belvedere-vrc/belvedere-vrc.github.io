@@ -1,7 +1,7 @@
 // お申し込み画面。1問ずつ進む形で入力してもらい、最後に確認して、Googleフォームへ送信する。
 // Googleフォームの画面は出さない。設定は apply-config.js。読み込みに失敗したときは、HTML側の文言が残る。
 //
-// 流れ: 営業日 → 部屋 → 指名の有無 →(指名ありなら)キャスト → 時間帯の枠 → お名前 → メールアドレス → 確認 → 送信
+// 流れ: 営業日 → 部屋 → 指名の有無 →(指名ありなら)キャスト → 時間帯の枠 → お名前 → VRChatのプロフィールURL → XのプロフィールURL → メールアドレス → 確認 → 送信
 //  ・営業日は、data/days.json(営業日時シート)。種類が「時間外」の日は、選べる部屋が変わり、手数料の案内が出る。
 //  ・通常営業は、予約に関係なく、固定の開催時刻(設定 regularStart。営業日時シートの start で日ごとに変えることも可)に開催する。
 //    その前後1時間以内の開始は、開始時刻ちょうどを除いて、全員が一律で選べない
@@ -20,7 +20,7 @@
   const root = document.getElementById("apply");
   if (!root) return;
 
-  const FIELD_KEYS = ["plan", "cast", "date", "slot", "name", "email"];
+  const FIELD_KEYS = ["plan", "cast", "date", "slot", "name", "vrchat", "x", "email"];
   const SLOT = Object.assign({ unit: 30, service: 60, block: 90, anyReserve: 2, eventGap: 60 }, cfg.slot || {});
   const SUFFIX = cfg.nominationSuffix || "＋指名";
 
@@ -171,7 +171,7 @@
     s.push("room");
     if (!castLocked) s.push("nominate");
     if (nominated() && !castLocked) s.push("cast");
-    s.push("slot", "name", "email", "confirm");
+    s.push("slot", "name", "vrchat", "x", "email", "confirm");
     return s;
   };
   const planValue = () => (answers.room || "") + (nominated() ? SUFFIX : "");
@@ -374,6 +374,19 @@
     return wrap;
   }
 
+  /* ---------- プロフィールのURL(VRChat・X) ---------- */
+  // 入力された文字を、決まった形のURLにする。読めないときは、空の文字を返す。
+  //  ・VRChat: https://vrchat.com/home/user/usr_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (ユーザーのプロフィールページ)
+  //  ・X: https://x.com/ユーザー名 (twitter.com でも可。ユーザー名は半角英数字と _ の15文字まで)
+  const normalizeVrchat = (v) => {
+    const m = String(v).trim().match(/^(?:https?:\/\/)?(?:www\.)?vrchat\.com\/home\/user\/(usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?(?:[?#].*)?$/i);
+    return m ? "https://vrchat.com/home/user/" + m[1].toLowerCase() : "";
+  };
+  const normalizeX = (v) => {
+    const m = String(v).trim().match(/^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})\/?(?:[?#].*)?$/i);
+    return m && !/^(home|i|explore|search|settings|messages|notifications|intent|share|compose)$/i.test(m[1]) ? "https://x.com/" + m[1] : "";
+  };
+
   const slotText = () => (answers.slot === undefined ? "" : hhmm(answers.slot) + "-" + hhmm(answers.slot + SLOT.service));
   const dateText = () => dateLabel(answers.date) + (typeOf() === "時間外" ? "（時間外）" : "");
 
@@ -383,7 +396,7 @@
     if (nominated()) rows.push(["指名キャスト", answers.cast]);
     rows.push(["希望の時間帯", slotText()]);
     if (typeOf() === "時間外" && cfg.overtimeFee) rows.push(["時間外手数料", cfg.overtimeFee]);
-    rows.push(["お名前", answers.name], ["メールアドレス", answers.email]);
+    rows.push(["お名前", answers.name], ["VRChatのプロフィール", normalizeVrchat(answers.vrchat)], ["Xのプロフィール", normalizeX(answers.x)], ["メールアドレス", answers.email]);
     rows.forEach(([k, v]) => {
       const d = el("div");
       d.appendChild(el("dt", null, k));
@@ -424,6 +437,8 @@
     body.set(cfg.fields.date, dateText());   // 時間外の営業には「（時間外）」が付く(同じ日に、通常営業と時間外の両方がある日を見分けるため)
     body.set(cfg.fields.slot, slotText());
     body.set(cfg.fields.name, answers.name);
+    body.set(cfg.fields.vrchat, normalizeVrchat(answers.vrchat));
+    body.set(cfg.fields.x, normalizeX(answers.x));
     body.set(cfg.fields.email, answers.email);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 20000);   // 通信が止まったままにならないように
@@ -514,7 +529,7 @@
       node = choiceStep("room", "ご希望のお部屋をお選びください", typeOf() === "時間外" ? "時間外の営業は、スイートのみのご案内です。" : "",
         options, answers.room, (o) => setAnswer("room", o.value), "お部屋は準備中です。");
     } else if (name === "nominate") {
-      node = choiceStep("nominate", "指名をされますか？", "指名は、1回の営業につき、お客様1人まで、1人のキャストにお願いします。", [
+      node = choiceStep("nominate", "指名をされますか？", "指名は、1回のご予約につき、1人のキャストにお願いします。", [
         { value: "no", label: "指名なし", note: "担当のキャストは、運営が決めます。" },
         { value: "yes", label: "指名する", note: "お好きなキャストを、1人、指名できます。" },
       ], answers.nominate, (o) => setAnswer("nominate", o.value), "");
@@ -529,6 +544,12 @@
     } else if (name === "name") {
       node = textStep("name", "お名前を教えてください", "VRChatでの表示名をご記入ください。", { placeholder: "お名前", autocomplete: "nickname" },
         (v) => (v ? (v.length > 100 ? "100文字以内でご記入ください。" : "") : "お名前をご記入ください。"));
+    } else if (name === "vrchat") {
+      node = textStep("vrchat", "VRChatのプロフィールのURLを教えてください", "VRChatのサイトで、ご自身のプロフィールページを開き、そのURLをご記入ください(例 https://vrchat.com/home/user/usr_…)。", { type: "text", placeholder: "https://vrchat.com/home/user/usr_...", autocomplete: "off", inputmode: "url" },
+        (v) => (normalizeVrchat(v) ? "" : "VRChatのプロフィールのURLをご確認ください(https://vrchat.com/home/user/usr_… の形です)。"));
+    } else if (name === "x") {
+      node = textStep("x", "XのプロフィールのURLを教えてください", "ご自身のXのプロフィールのURLをご記入ください(例 https://x.com/アカウント名)。", { type: "text", placeholder: "https://x.com/...", autocomplete: "off", inputmode: "url" },
+        (v) => (normalizeX(v) ? "" : "XのプロフィールのURLをご確認ください(https://x.com/アカウント名 の形です)。"));
     } else if (name === "email") {
       node = textStep("email", "メールアドレスを教えてください", "確認のメールをお送りします。", { type: "email", placeholder: "example@mail.com", autocomplete: "email", inputmode: "email" },
         (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? "" : "メールアドレスの形式をご確認ください。"));
