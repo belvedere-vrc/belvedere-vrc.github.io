@@ -29,6 +29,23 @@ function applyLogo() {
 }
 applyLogo();
 
+// トップページの背景(ワールドの写真など)。サイトのフォルダー(index.html と同じ場所)に置いた画像のファイル名を書く(例 "hero.jpg")。
+// 空のあいだと、画像が読み込めないときは、今までの背景のまま。横長の写真(幅 1920px ほど、500KB 以下がおすすめ)。
+// 写真の上に、暗い幕をかけて、文字を読みやすくする(下の方は、ページの色に溶けるようにしてある)。
+const HERO_IMAGE = "";
+
+function applyHero(src) {
+  const hero = document.querySelector(".hero");
+  if (!hero || !src) return;
+  const probe = new Image();
+  probe.onload = () => {
+    hero.style.setProperty("--hero-image", 'url("' + src + '")');
+    hero.classList.add("has-bg");
+  };
+  probe.src = src;
+}
+applyHero(HERO_IMAGE);
+
 async function loadJson(path) {
   const res = await fetch(path, { cache: "no-cache" });
   if (!res.ok) throw new Error(path + ": " + res.status);

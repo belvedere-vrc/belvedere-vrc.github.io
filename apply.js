@@ -86,6 +86,14 @@
     return m ? toMin(m[1], m[2]) : null;
   }
 
+  // 同じ日に、通常営業(開催時刻 t)と時間外の営業の両方があるとき、時間外の営業では、通常営業の時間帯(t から接客の長さ分)と重なる枠は選べない
+  // (21:00開催なら、20:30・21:00・21:30 の枠は不可。20:00〜21:00 と 22:00〜 は、選べる)。
+  function overlapsRegular(iso, s, type) {
+    if (type !== "時間外") return false;
+    const t = regularMin(iso, "通常");
+    return t !== null && s < t + SLOT.service && t < s + SLOT.service;
+  }
+
   // 出勤予定の文字(「20:00-23:30」)を、分の範囲にする。時刻が読めないもの(「出勤」だけ)は、枠を作れないので、除く
   function parseWindows(list) {
     const out = [];
@@ -162,6 +170,7 @@
       }
       if (!inShift) reason = "out";
       else if (date < today || (date === today && s <= nowMin)) reason = "past";
+      else if (overlapsRegular(date, s, type)) reason = "event";
       else if (castId ? bookedMin.some((b) => s < b + SLOT.block && b < s + SLOT.block) : !anyFits(date, s, anyMin)) reason = "booked";
       out.push({ start: s, label: hhmm(s) + "-" + hhmm(s + SLOT.service), reason });
     }
@@ -345,6 +354,7 @@
         b.disabled = true;
         b.classList.add("off", "r-" + s.reason);
         if (s.reason === "booked") b.setAttribute("title", "ほかのご予約があるため、選べません");
+        if (s.reason === "event") b.setAttribute("title", "通常営業の時間帯と重なるため、選べません");
       } else {
         const on = answers.slot === s.start;
         b.setAttribute("aria-pressed", String(on));
@@ -361,6 +371,21 @@
     });
     const body = el("div");
     body.appendChild(grid);
+    // 同じ日に、通常営業と時間外の営業の両方があるときは、時間帯を選ぶところで、時間外の案内を出す
+    //  ・時間外の営業を選んでいるとき: 通常営業もある日で、こちらは時間外(追加料金)であること
+    //  ・通常営業を選んでいるとき: 開催時刻以外の時間帯は、時間外の営業(追加料金)になること
+    const sameDay = bizDays.filter((d) => d.date === date);
+    const hasRegular = sameDay.some((d) => d.type === "通常");
+    const hasOvertime = sameDay.some((d) => d.type === "時間外");
+    if (hasRegular && hasOvertime) {
+      const rm = regularMin(date, "通常");
+      const regLabel = rm !== null ? "(" + hhmm(rm) + ")" : "";
+      const fee = cfg.overtimeNote || "";
+      const msg = typeOf() === "時間外"
+        ? "この日は、通常営業" + regLabel + "もあります。こちらは、時間外の営業です。" + fee
+        : "通常営業は、開催時刻の枠のみです。それ以外の時間帯は、時間外の営業でお受けします(「戻る」で、営業日の「（時間外）」をお選びください)。" + fee;
+      body.appendChild(el("p", "apply-notice", msg));
+    }
     if (list.length > 1) body.appendChild(el("p", "apply-fine", "灰色の枠は、出勤の時間外か、ほかのご予約のため、選べません。"));
     if (!castId) body.appendChild(el("p", "apply-fine", "指名なしのお席は、時間帯ごとに受付できる数に限りがあります。"));
     return frame("ご希望の時間帯をお選びください", lead, body, { next: false }).wrap;   // 選んだ時点で次へ進むので、「次へ」は出さない

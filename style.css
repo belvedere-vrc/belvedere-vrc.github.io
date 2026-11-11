@@ -140,6 +140,15 @@ h3 { letter-spacing: .1em; }
 .hero {
   text-align: center; padding: 120px 0 96px;
 }
+/* ワールドの背景(script.js の HERO_IMAGE)。ページの幅いっぱいに広げ、暗い幕をかけて、下は、ページの色に溶け込ませる */
+body { overflow-x: clip; }
+.hero.has-bg { position: relative; isolation: isolate; min-height: min(78vh, 600px); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.hero.has-bg::before {
+  content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: 50%; width: 100vw; margin-left: -50vw;
+  background:
+    linear-gradient(180deg, rgba(19, 13, 10, .55) 0%, rgba(19, 13, 10, .35) 45%, rgba(19, 13, 10, .75) 85%, var(--bg) 100%),
+    var(--hero-image) center / cover no-repeat;
+}
 .eyebrow { font-family: var(--latin); letter-spacing: .6em; color: var(--accent); margin: 0 0 16px; }
 .hero h1 { font-size: clamp(28px, 6vw, 48px); letter-spacing: .15em; margin: 0 0 16px; }
 .lead { color: var(--muted); margin: 0 0 40px; }
@@ -251,6 +260,7 @@ td:first-child, th:first-child { text-align: left; }
   box-shadow: var(--lift); color: var(--text); font: inherit; cursor: pointer; text-align: inherit; transition: transform .2s, background .2s; }
 .apply-choice:hover, .apply-choice:focus-visible { transform: translateY(-2px); background: var(--bg-raised); }
 .apply-choice:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
+.apply-notice { max-width: 480px; margin: 20px auto 0; padding: 10px 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); color: var(--text); font-size: 14px; line-height: 1.8; text-align: left; }
 .apply-choice .price { display: block; margin-top: 8px; font-size: 17px; font-weight: 600; color: var(--accent-bright); letter-spacing: .04em; }
 .apply-choice .yen { display: block; margin-top: -4px; font-size: 13px; color: var(--muted); }
 .apply-choice:disabled { opacity: .4; cursor: not-allowed; transform: none; background: var(--surface); }
