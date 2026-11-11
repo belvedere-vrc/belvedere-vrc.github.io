@@ -4,6 +4,7 @@
 // 流れ: 指名の有無 →(指名ありなら)キャスト → 営業日 → 時間帯の枠 → 部屋 → お名前 → VRChatのプロフィールURL → XのプロフィールURL → メールアドレス → 確認 → 送信
 //  ・営業日は、キャストの出勤予定(data/schedule.json)に日付がある日(今日以降)。営業日時シートには、特別営業(告知のみ)の日だけを書く。
 //  ・通常営業の枠は、固定の開催時刻(設定 regularStart。21:00 など)の1つだけ。通常営業の日は、設定 regularWeekday の曜日(例 6=毎週土曜)だけ。
+//    通常営業の日は、開催時刻の前後1時間(設定 eventGap。21:00なら 20:00・20:30・21:30・22:00)の枠は、選べない。
 //    それ以外の、出勤予定に入っている時間帯の枠(通常営業のない曜日の枠も)は、すべて「時間外」
 //    (部屋は、スイートのみ。時間外手数料がかかる)。通常営業の枠は、その時刻に出勤しているキャストから、予約できる数を数える。
 //    regularStart が空のあいだは、すべて通常(時間外にしない)。
@@ -23,7 +24,7 @@
   if (!root) return;
 
   const FIELD_KEYS = ["plan", "cast", "date", "slot", "name", "vrchat", "x", "email"];
-  const SLOT = Object.assign({ unit: 30, service: 60, block: 90, anyReserve: 2 }, cfg.slot || {});
+  const SLOT = Object.assign({ unit: 30, service: 60, block: 90, anyReserve: 2, eventGap: 60 }, cfg.slot || {});
   const SUFFIX = cfg.nominationSuffix || "＋指名";
 
   // answers: date(2026-12-05) / room / nominate("yes"|"no") / cast(名前) / castId / slot(開始の分) / name / email
@@ -87,6 +88,12 @@
     return new Date(iso + "T00:00:00Z").getUTCDay() === Number(w);
   };
   const regularMin = (iso) => (regularDay(iso) ? regularTime() : null);   // その日の通常営業の枠(開始の分)。通常営業がない日は null
+  // 通常営業の日は、通常営業の開始時刻の前後 eventGap 分(1時間)以内の枠は、選べない(開催時刻ちょうどの枠は、通常営業の枠なので、選べる)。
+  // 21:00開催なら、20:00・20:30・21:30・22:00 が不可。通常営業のない日は、この制限をかけない。
+  const aroundRegular = (iso, s) => {
+    const t = regularMin(iso);
+    return t !== null && s !== t && Math.abs(s - t) <= SLOT.eventGap;
+  };
   const slotType = (iso, s) => {
     if (regularTime() === null) return "通常";
     const t = regularMin(iso);
@@ -172,6 +179,7 @@
       }
       if (!inShift) reason = "out";
       else if (date < today || (date === today && s <= nowMin)) reason = "past";
+      else if (aroundRegular(date, s)) reason = "event";
       else if (castId ? bookedMin.some((b) => s < b + SLOT.block && b < s + SLOT.block) : !anyFits(date, s, anyMin)) reason = "booked";
       out.push({ start: s, label: hhmm(s) + "-" + hhmm(s + SLOT.service), type: slotType(date, s), reason });
     }
@@ -356,6 +364,7 @@
         b.disabled = true;
         b.classList.add("off", "r-" + s.reason);
         if (s.reason === "booked") b.setAttribute("title", "ほかのご予約があるため、選べません");
+        if (s.reason === "event") b.setAttribute("title", "通常営業の開始の前後1時間のため、選べません");
       } else {
         const on = answers.slot === s.start;
         b.setAttribute("aria-pressed", String(on));
@@ -376,7 +385,7 @@
     const rt = regularTime();
     if (rt !== null) {
       const msg = regularDay(date)
-        ? "通常営業は、" + hhmm(rt) + " の枠です。それ以外の時間帯は、時間外の営業となります。"
+        ? "通常営業は、" + hhmm(rt) + " の枠です。その前後1時間は、お受けしていません。それ以外の時間帯は、時間外の営業となります。"
         : "この日は、通常営業はありません。すべて、時間外の営業となります。";
       body.appendChild(el("p", "apply-notice", msg + (cfg.overtimeNote || "")));
     }
