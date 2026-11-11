@@ -2,12 +2,14 @@
 // Googleフォームの画面は出さない。設定は apply-config.js。読み込みに失敗したときは、HTML側の文言が残る。
 //
 // 流れ: 指名の有無 →(指名ありなら)キャスト → 営業日 → 時間帯の枠 → 部屋 → お名前 → VRChatのプロフィールURL → XのプロフィールURL → メールアドレス → 確認 → 送信
-//  ・営業日は、data/days.json(営業日時シート)。種類が「時間外」の日は、選べる部屋が変わり、手数料の案内が出る。
-//  ・通常営業(通常回)は、予約に関係なく、固定の開催時刻(設定 regularStart。営業日時シートの start で日ごとに変えることも可)に開催する。
-//    通常回の予約で選べる時間は、その開催時刻の枠だけ(21:00開催なら、21:00だけ)。時間外の営業・開催時刻が無い日は、この制限をかけない。
-//  ・同じ日付に、通常営業と時間外の両方がある日は、営業日の選択肢に2つ出る(時間外には「（時間外）」が付く)。部屋・手数料・選べる時間は、それぞれ別。
+//  ・営業日は、キャストの出勤予定(data/schedule.json)に日付がある日(今日以降)。営業日時シートには、特別営業(告知のみ)の日だけを書く。
+//  ・通常営業の枠は、固定の開催時刻(設定 regularStart。21:00 など)の1つだけ。通常営業の日は、設定 regularWeekday の曜日(例 6=毎週土曜)だけ。
+//    それ以外の、出勤予定に入っている時間帯の枠(通常営業のない曜日の枠も)は、すべて「時間外」
+//    (部屋は、スイートのみ。時間外手数料がかかる)。通常営業の枠は、その時刻に出勤しているキャストから、予約できる数を数える。
+//    regularStart が空のあいだは、すべて通常(時間外にしない)。
+//  ・時間外かどうかは、選んだ時間帯で決まる。だから、時間帯を選んだあとに、お部屋(と料金)を選ぶ。
 //  ・料金は、お部屋を選ぶ画面と確認画面に出す(設定の price・nominationFee・overtimeFee。指名ありは指名料、時間外は手数料を足した合計)。
-//  ・枠は30分単位(時間外の営業)。キャストの出勤予定(data/schedule.json)の時間帯の中だけ選べる。
+//  ・枠は30分単位。キャストの出勤予定(data/schedule.json)の時間帯の中だけ選べる。
 //  ・選んだ時点で次の画面に進む画面(指名・キャスト・営業日・時間帯・部屋)には、「次へ」ボタンを出さない。
 //  ・指名ありは、同じキャストのすでにある予約の前後1時間(開始が1時間以内=21:00の予約なら、20:00〜22:00開始)の枠を、全員が選べない
 //    (data/booked.json の cast。接客60分＋余裕30分=90分の重なりと同じ結果)。選べる枠が無い日は、そのキャストを選べない。
@@ -24,12 +26,12 @@
   const SLOT = Object.assign({ unit: 30, service: 60, block: 90, anyReserve: 2 }, cfg.slot || {});
   const SUFFIX = cfg.nominationSuffix || "＋指名";
 
-  // answers: date(2026-12-05) / type("通常"か"時間外"。同じ日付に両方ある日があるので、日付とあわせて営業日として選ぶ) / room / nominate("yes"|"no") / cast(名前) / castId / slot(開始の分) / name / email
+  // answers: date(2026-12-05) / room / nominate("yes"|"no") / cast(名前) / castId / slot(開始の分) / name / email
   const answers = {};
   let step = 0;
   let sending = false;
   let castList = [];   // [{ id, name, image }]
-  let bizDays = [];    // [{ date, type }]
+  let bizDays = [];    // [{ date }](出勤予定に日付がある日。今日以降)
   let schedule = {};   // { キャストid: { 日付: ["20:00-23:00"] } }
   let booked = {};     // { cast: { キャストid: { 日付: ["21:00"] } } }
 
@@ -71,28 +73,36 @@
   };
 
   /* ---------- 営業日・出勤・枠 ---------- */
-  // いま選んでいる営業の種類。同じ日付に、通常営業と時間外の両方がある日があるので、日付だけでは決まらない(営業日の選択で決める)。
-  const typeOf = () => answers.type || "通常";
-  // 通常営業(通常回)は、予約に関係なく、決まった時刻に開催する。通常回の予約で選べるのは、その開催時刻の枠だけ
-  // (21:00開催なら、21:00だけ。前後の時刻は選べない)。全キャスト・全員が一律。
-  // 開催時刻は、基本的に固定(設定 regularStart)。営業日時シートの start に書いた日だけ、その時刻を使う(例外の日用)。
-  // 開催時刻がどちらにも無い日と、時間外の営業は、この制限をかけない(時間外は、出勤の時間帯の中で、30分刻みで選べる)。
-  // 戻り値: 開催時刻(0時からの分)。制限をかけないときは null。
-  function regularMin(iso, type) {
-    if (type !== "通常") return null;
-    const d = bizDays.find((x) => x.date === iso && x.type === "通常");
-    const start = d && (d.start || cfg.regularStart);
-    const m = start && String(start).match(/^(\d{1,2}):(\d{2})$/);
+  // 通常営業の枠は、固定の開催時刻(設定 regularStart)の1つだけ。開始が開催時刻と同じ枠が「通常」、それ以外の枠は「時間外」。
+  // 通常営業の日は、設定 regularWeekday(0=日曜〜6=土曜。例 6)の曜日だけ。空のあいだは、毎日(出勤予定のある日は、すべて通常営業の日)。
+  // その曜日ではない日は、通常営業がないので、出勤予定の枠は、すべて時間外。
+  // regularStart が空のあいだは、すべて「通常」(時間外にしない)。
+  const regularTime = () => {   // 固定の開催時刻(0時からの分)。無いときは null
+    const m = String(cfg.regularStart || "").match(/^(\d{1,2}):(\d{2})$/);
     return m ? toMin(m[1], m[2]) : null;
-  }
-
-  // 同じ日に、通常営業(開催時刻 t)と時間外の営業の両方があるとき、時間外の営業では、通常営業の時間帯(t から接客の長さ分)と重なる枠は選べない
-  // (21:00開催なら、20:30・21:00・21:30 の枠は不可。20:00〜21:00 と 22:00〜 は、選べる)。
-  function overlapsRegular(iso, s, type) {
-    if (type !== "時間外") return false;
-    const t = regularMin(iso, "通常");
-    return t !== null && s < t + SLOT.service && t < s + SLOT.service;
-  }
+  };
+  const regularDay = (iso) => {   // その日は、通常営業の日か
+    const w = cfg.regularWeekday;
+    if (w === undefined || w === null || w === "") return true;
+    return new Date(iso + "T00:00:00Z").getUTCDay() === Number(w);
+  };
+  const regularMin = (iso) => (regularDay(iso) ? regularTime() : null);   // その日の通常営業の枠(開始の分)。通常営業がない日は null
+  const slotType = (iso, s) => {
+    if (regularTime() === null) return "通常";
+    const t = regularMin(iso);
+    return t !== null && s === t ? "通常" : "時間外";
+  };
+  // いま選んでいる時間帯の種類(通常か時間外)。時間帯を選ぶまでは、通常
+  const typeOf = () => (answers.slot === undefined ? "通常" : slotType(answers.date, answers.slot));
+  // 出勤予定に日付がある日(今日以降)を、営業日にする
+  const scheduleDays = () => {
+    const set = {};
+    Object.keys(schedule).forEach((cid) => {
+      const days = schedule[cid] || {};
+      Object.keys(days).forEach((d) => { if (/^\d{4}-\d{2}-\d{2}$/.test(d) && parseWindows(days[d]).length > 0) set[d] = true; });
+    });
+    return Object.keys(set).filter((d) => d >= todayIso()).sort().map((d) => ({ date: d }));
+  };
 
   // 出勤予定の文字(「20:00-23:30」)を、分の範囲にする。時刻が読めないもの(「出勤」だけ)は、枠を作れないので、除く
   function parseWindows(list) {
@@ -110,7 +120,7 @@
   const castWorks = (castId, date) => castWindows(castId, date).length > 0;
   // そのキャストが、その日に指名できる(選べる枠が、ひとつでも残っている)か。
   // すでにある予約が終わったあと(接客60分＋余裕30分のあと)の枠なら、同じキャストでも、続けて指名できる。
-  const castFree = (castId, date, type) => castWorks(castId, date) && hasOpenSlot(date, castId, type);
+  const castFree = (castId, date) => castWorks(castId, date) && hasOpenSlot(date, castId);
 
   // 予約の開始時刻の一覧(「21:00」の文字)を、分にする
   const startsToMin = (list) => (Array.isArray(list) ? list : [])
@@ -135,7 +145,7 @@
 
   // その日の枠の一覧。castId があれば、そのキャストの出勤とブロックで、なければ、指名なしの受付数で決める。
   // reason: ""=選べる / "out"=出勤時間外(指名なしは、人数が足りない時間帯) / "past"=過ぎた枠 / "booked"=予約済みの枠に近い、または指名なしが満席
-  function slotList(date, castId, type) {
+  function slotList(date, castId) {
     let windows = [];
     if (castId) windows = castWindows(castId, date);
     else castList.forEach((c) => { windows = windows.concat(castWindows(c.id, date)); });
@@ -149,17 +159,9 @@
     const lo = Math.min.apply(null, windows.map((w) => w.s));
     const hi = Math.max.apply(null, windows.map((w) => w.e));
 
-    // 通常回は、開催時刻の枠だけ(出勤の時間帯におさまっているときだけ)。それ以外は、30分刻みの枠。
-    const only = regularMin(date, type);
-    const starts = [];
-    if (only !== null) {
-      if (only >= lo && only + SLOT.service <= hi) starts.push(only);
-    } else {
-      for (let s = Math.ceil(lo / SLOT.unit) * SLOT.unit; s + SLOT.service <= hi; s += SLOT.unit) starts.push(s);
-    }
-
+    // 出勤の時間帯の中の、30分刻みの枠すべて。開催時刻と同じ開始の枠が通常、それ以外は時間外(type)
     const out = [];
-    for (const s of starts) {
+    for (let s = Math.ceil(lo / SLOT.unit) * SLOT.unit; s + SLOT.service <= hi; s += SLOT.unit) {
       let reason = "";
       let inShift;
       if (castId) {
@@ -170,13 +172,12 @@
       }
       if (!inShift) reason = "out";
       else if (date < today || (date === today && s <= nowMin)) reason = "past";
-      else if (overlapsRegular(date, s, type)) reason = "event";
       else if (castId ? bookedMin.some((b) => s < b + SLOT.block && b < s + SLOT.block) : !anyFits(date, s, anyMin)) reason = "booked";
-      out.push({ start: s, label: hhmm(s) + "-" + hhmm(s + SLOT.service), reason });
+      out.push({ start: s, label: hhmm(s) + "-" + hhmm(s + SLOT.service), type: slotType(date, s), reason });
     }
     return out;
   }
-  const hasOpenSlot = (date, castId, type) => slotList(date, castId, type).some((s) => !s.reason);
+  const hasOpenSlot = (date, castId) => slotList(date, castId).some((s) => !s.reason);
 
   /* ---------- 流れ ---------- */
   const nominated = () => answers.nominate === "yes";
@@ -191,7 +192,7 @@
     return s;
   };
   // そのキャストが、今日以降の営業日のどれかで、指名できる(選べる枠が残っている)か
-  const castAnyFree = (castId) => bizDays.some((d) => d.date >= todayIso() && castFree(castId, d.date, d.type));
+  const castAnyFree = (castId) => bizDays.some((d) => d.date >= todayIso() && castFree(castId, d.date));
   const castAnyWorks = (castId) => bizDays.some((d) => d.date >= todayIso() && castWorks(castId, d.date));
   const planValue = () => (answers.room || "") + (nominated() ? SUFFIX : "");
 
@@ -199,19 +200,19 @@
   function setAnswer(key, value) {
     answers[key] = value;
     if (key === "date") {
-      delete answers.slot;
-      const allowed = roomsFor(typeOf()).map((r) => r.value);
-      if (answers.room && allowed.indexOf(answers.room) < 0) delete answers.room;
-      if (answers.castId && !castFree(answers.castId, value, typeOf())) { delete answers.cast; delete answers.castId; }
+      delete answers.slot; delete answers.room;   // 時間帯(と、それで決まるお部屋)は、選び直す
+      if (answers.castId && !castFree(answers.castId, value)) { delete answers.cast; delete answers.castId; }
     } else if (key === "nominate") {
-      delete answers.slot;
+      delete answers.slot; delete answers.room;
       if (value === "no") { delete answers.cast; delete answers.castId; }
     } else if (key === "cast") {
-      delete answers.slot;
+      delete answers.slot; delete answers.room;
       // キャストを選び直したとき、選んである営業日が、そのキャストで選べなければ、営業日から選び直してもらう
-      if (answers.date && !castFree(answers.castId, answers.date, typeOf())) {
-        delete answers.date; delete answers.type; delete answers.room;
-      }
+      if (answers.date && !castFree(answers.castId, answers.date)) delete answers.date;
+    } else if (key === "slot") {
+      // 時間帯で、通常か時間外かが決まる。選んであるお部屋が、その種類で選べなければ、お部屋を選び直す
+      const allowed = roomsFor(typeOf()).map((r) => r.value);
+      if (answers.room && allowed.indexOf(answers.room) < 0) delete answers.room;
     }
   }
   const roomsFor = (type) => rooms.filter((r) => !Array.isArray(r.types) || r.types.indexOf(type) >= 0);
@@ -251,7 +252,7 @@
       reset.addEventListener("click", () => {
         castLocked = false;
         dateLocked = false;
-        ["date", "type", "room", "nominate", "cast", "castId", "slot"].forEach((k) => delete answers[k]);
+        ["date", "room", "nominate", "cast", "castId", "slot"].forEach((k) => delete answers[k]);
         go(0);
       });
       chip.appendChild(reset);
@@ -336,7 +337,7 @@
   function slotStep() {
     const date = answers.date;
     const castId = nominated() ? answers.castId : "";
-    const list = slotList(date, castId, answers.type);
+    const list = slotList(date, castId);
     const lead = (nominated() ? answers.cast + "の" : "") + dateText() + "の枠です。" + SLOT.service + "分のお時間です。";
 
     if (!list.some((s) => !s.reason)) {
@@ -350,17 +351,17 @@
       b.type = "button";
       b.appendChild(el("span", "t", hhmm(s.start)));
       b.appendChild(el("span", "u", "〜" + hhmm(s.start + SLOT.service)));
+      if (s.type === "時間外" && regularTime() !== null) b.appendChild(el("span", "o", "時間外"));   // 通常営業の枠(開催時刻)以外は、時間外
       if (s.reason) {
         b.disabled = true;
         b.classList.add("off", "r-" + s.reason);
         if (s.reason === "booked") b.setAttribute("title", "ほかのご予約があるため、選べません");
-        if (s.reason === "event") b.setAttribute("title", "通常営業の時間帯と重なるため、選べません");
       } else {
         const on = answers.slot === s.start;
         b.setAttribute("aria-pressed", String(on));
         if (on) b.classList.add("on");
         b.addEventListener("click", () => {
-          answers.slot = s.start;
+          setAnswer("slot", s.start);
           grid.querySelectorAll(".apply-slot").forEach((x) => { x.classList.remove("on"); x.setAttribute("aria-pressed", "false"); });
           b.classList.add("on");
           b.setAttribute("aria-pressed", "true");
@@ -371,20 +372,13 @@
     });
     const body = el("div");
     body.appendChild(grid);
-    // 同じ日に、通常営業と時間外の営業の両方があるときは、時間帯を選ぶところで、時間外の案内を出す
-    //  ・時間外の営業を選んでいるとき: 通常営業もある日で、こちらは時間外(追加料金)であること
-    //  ・通常営業を選んでいるとき: 開催時刻以外の時間帯は、時間外の営業(追加料金)になること
-    const sameDay = bizDays.filter((d) => d.date === date);
-    const hasRegular = sameDay.some((d) => d.type === "通常");
-    const hasOvertime = sameDay.some((d) => d.type === "時間外");
-    if (hasRegular && hasOvertime) {
-      const rm = regularMin(date, "通常");
-      const regLabel = rm !== null ? "(" + hhmm(rm) + ")" : "";
-      const fee = cfg.overtimeNote || "";
-      const msg = typeOf() === "時間外"
-        ? "この日は、通常営業" + regLabel + "もあります。こちらは、時間外の営業です。" + fee
-        : "通常営業は、開催時刻の枠のみです。それ以外の時間帯は、時間外の営業でお受けします(「戻る」で、営業日の「（時間外）」をお選びください)。" + fee;
-      body.appendChild(el("p", "apply-notice", msg));
+    // 通常営業の枠は、開催時刻の1つだけ。それ以外の時間帯は、時間外(追加料金)になることを、時間帯を選ぶところで案内する
+    const rt = regularTime();
+    if (rt !== null) {
+      const msg = regularDay(date)
+        ? "通常営業は、" + hhmm(rt) + " の枠です。それ以外の時間帯は、時間外の営業となります。"
+        : "この日は、通常営業はありません。すべて、時間外の営業となります。";
+      body.appendChild(el("p", "apply-notice", msg + (cfg.overtimeNote || "")));
     }
     if (list.length > 1) body.appendChild(el("p", "apply-fine", "灰色の枠は、出勤の時間外か、ほかのご予約のため、選べません。"));
     if (!castId) body.appendChild(el("p", "apply-fine", "指名なしのお席は、時間帯ごとに受付できる数に限りがあります。"));
@@ -465,13 +459,15 @@
   }
 
   const slotText = () => (answers.slot === undefined ? "" : hhmm(answers.slot) + "-" + hhmm(answers.slot + SLOT.service));
-  const dateText = () => dateLabel(answers.date) + (typeOf() === "時間外" ? "（時間外）" : "");
+  // 時間外の枠には、「（時間外）」を付けて送る(通常と時間外を、受け取る側で見分けるため)
+  const slotSendText = () => slotText() + (typeOf() === "時間外" && regularTime() !== null ? "（時間外）" : "");
+  const dateText = () => dateLabel(answers.date);
 
   function confirmStep() {
     const dl = el("dl", "apply-summary");
     const rows = [["希望の営業日", dateText()], ["区分", planValue()]];
     if (nominated()) rows.push(["指名キャスト", answers.cast]);
-    rows.push(["希望の時間帯", slotText()]);
+    rows.push(["希望の時間帯", slotSendText()]);
     const pr = priceOf(roomOf(answers.room), nominated(), typeOf());
     if (pr) {
       pr.parts.forEach(([k, v]) => rows.push([k, money(v)]));
@@ -518,8 +514,8 @@
     const body = new URLSearchParams();
     body.set(cfg.fields.plan, planValue());
     body.set(cfg.fields.cast, nominated() ? answers.cast : "");
-    body.set(cfg.fields.date, dateText());   // 時間外の営業には「（時間外）」が付く(同じ日に、通常営業と時間外の両方がある日を見分けるため)
-    body.set(cfg.fields.slot, slotText());
+    body.set(cfg.fields.date, dateText());
+    body.set(cfg.fields.slot, slotSendText());   // 時間外の枠には「（時間外）」が付く(例 18:00-19:00（時間外）)
     body.set(cfg.fields.name, escapeName(answers.name));   // お名前は、必ずエスケープしてから送る
     body.set(cfg.fields.vrchat, normalizeVrchat(answers.vrchat));
     body.set(cfg.fields.x, normalizeX(answers.x));
@@ -603,10 +599,10 @@
       const options = bizDays
         .filter((d) => d.date >= today)
         // 接客できるキャストがいない日(出勤がない・枠が残っていない日)は、出さない。指名ありは、そのキャストで選べる日だけ。
-        .filter((d) => (answers.castId ? castFree(answers.castId, d.date, d.type) : hasOpenSlot(d.date, "", d.type)))
-        .map((d) => ({ value: d.date + "|" + d.type, date: d.date, type: d.type, label: dateLabel(d.date) + (d.type === "時間外" ? "（時間外）" : ""), note: d.type === "時間外" ? (cfg.overtimeNote || "") : "" }));
-      node = choiceStep("date", "ご希望の営業日をお選びください", dateNote, options, answers.date ? answers.date + "|" + typeOf() : undefined,
-        (o) => { answers.type = o.type; setAnswer("date", o.date); },
+        .filter((d) => (answers.castId ? castFree(answers.castId, d.date) : hasOpenSlot(d.date, "")))
+        .map((d) => ({ value: d.date, date: d.date, label: dateLabel(d.date) }));
+      node = choiceStep("date", "ご希望の営業日をお選びください", dateNote, options, answers.date,
+        (o) => setAnswer("date", o.date),
         castLocked ? answers.cast + "は、お申し込みできる営業日がありません(枠が埋まっています)。「選び直す」から、別のキャストや指名なしをお選びください。"
           : answers.castId ? answers.cast + "は、お申し込みできる営業日がありません(枠が埋まっています)。「戻る」から、別のキャストや指名なしをお選びください。"
           : "お申し込みできる営業日は、調整中です。決まり次第、受け付けます。");
@@ -674,16 +670,11 @@
     answers.nominate = "yes";
     castLocked = true;
     if (dateParam) {
-      // 同じ日付に、通常営業と時間外の両方があるときは、日付だけでは決められない(営業日の選択で、どちらかを選んでもらう)
-      const days = bizDays.filter((d) => d.date === dateParam && d.date >= todayIso());
-      const free = days.filter((d) => castFree(c.id, d.date, d.type));
-      if (days.length === 1 && free.length === 1) {
-        answers.date = days[0].date;
-        answers.type = days[0].type;
+      const day = bizDays.find((d) => d.date === dateParam && d.date >= todayIso());
+      if (day && castFree(c.id, day.date)) {
+        answers.date = day.date;
         dateLocked = true;
-      } else if (free.length > 1) {
-        dateNote = dateLabel(dateParam) + "は、通常営業と時間外の両方があります。ご希望の営業をお選びください。";
-      } else if (days.some((d) => castWorks(c.id, d.date))) {
+      } else if (day && castWorks(c.id, day.date)) {
         dateNote = dateLabel(dateParam) + "は、" + c.name + "の枠がすべて埋まっています。別の営業日をお選びください。";
       } else {
         dateNote = dateLabel(dateParam) + "は、お申し込みの受付日に含まれていません。ご希望の営業日をお選びください。";
@@ -696,18 +687,16 @@
   const empty = () => ({});
   Promise.all([
     loadJson("data/cast.json").catch(() => []),
-    loadJson("data/next.json").catch(empty),
-    loadJson("data/days.json").catch(() => []),
     loadJson("data/schedule.json").catch(empty),
     loadJson("data/booked.json").catch(empty),
-  ]).then(([cast, next, days, sched, bk]) => {
+  ]).then(([cast, sched, bk]) => {
     // id は、キャストの詳細ページと同じ規則(castId: 並び順を含むので、名前で絞る前に付ける)
     castList = (Array.isArray(cast) ? cast : [])
       .map((c, i) => (c ? { id: castId(c, i), name: c.name, image: c.image } : null))
       .filter((c) => c && c.name);
-    bizDays = businessDays(days, next);
     schedule = sched && typeof sched === "object" ? sched : {};
     booked = bk && typeof bk === "object" ? bk : {};
+    bizDays = scheduleDays();   // 出勤予定に日付がある日が、営業日
     applyPresets();
     start();
   });

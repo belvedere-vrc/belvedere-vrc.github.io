@@ -126,27 +126,8 @@ function renderLinks(data) {
   });
 }
 
-// 営業日の一覧 [{ date: "2026-12-05", type: "通常" | "時間外", start: "21:00"(あるときだけ) }](日付の古い順)。
-// data/days.json(営業日時シート)を使う。無いときは、次回開催の日付(data/next.json の date)を「通常」の1日として使う。
-function businessDays(days, next) {
-  let list = (Array.isArray(days) ? days : [])
-    .filter((d) => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date) && d.type !== "特別")   // 特別営業は、告知のみ(事前の予約は受け付けない)ので、予約の営業日には入れない
-    .map((d) => {
-      const day = { date: d.date, type: d.type === "時間外" ? "時間外" : "通常" };
-      if (/^\d{1,2}:\d{2}$/.test(String(d.start || ""))) day.start = d.start;
-      return day;
-    });
-  if (list.length === 0 && next && next.date) {
-    const m = String(next.date).match(/(\d{4})\s*[年\/.-]\s*(\d{1,2})\s*[月\/.-]\s*(\d{1,2})/);
-    if (m) list = [{ date: m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2), type: "通常" }];
-  }
-  // 同じ日付に、通常営業と時間外の両方があってもよい(通常営業が先)
-  const rank = (d) => (d.type === "時間外" ? 1 : 0);
-  return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : rank(a) - rank(b)));
-}
-
 // 特別営業(告知のみ・事前の予約は受け付けない)の一覧。今日(日本時間)以降のものを、日付の古い順に。
-// data/days.json の type が「特別」の行。start(開始時刻)と note(説明)は、あるときだけ出す。
+// data/days.json(営業日時シート=特別営業の日だけ)。start(開始時刻)と note(説明)は、あるときだけ出す。
 function specialDays(days) {
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   return (Array.isArray(days) ? days : [])
@@ -336,7 +317,7 @@ function linkLabel(url) {
 }
 
 // キャスト詳細。cast-detail.html?id=… の id に合うキャストを cast.json から探して表示する。
-function renderCastDetail(list, schedule, next, days) {
+function renderCastDetail(list, schedule, next) {
   const status = document.getElementById("detail-status");
   if (!status || !Array.isArray(list)) return;
   const id = new URLSearchParams(location.search).get("id");
@@ -433,9 +414,8 @@ function renderCastDetail(list, schedule, next, days) {
 
   // 出勤予定(カレンダー)。data/schedule.json は { キャストid: { "2026-12-05": ["21:00-23:00", …], … } }
   // 予定のある日を押すと、そのキャストと日付を選んだ状態で、申し込み画面を開く
-  // (営業日でない日は、予定として見せるだけで、押せない)
-  const bizDates = new Set(businessDays(days, next).map((d) => d.date));
-  renderSchedule(schedule && schedule[cid], (date) => (bizDates.has(date) ? entryHref(entryUrl, { cast: cid, date }, true) : ""));
+  // (営業日は、出勤予定のある日。出勤予定のある日は、すべて、申し込みにつながる)
+  renderSchedule(schedule && schedule[cid], (date) => entryHref(entryUrl, { cast: cid, date }, true));
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -646,9 +626,8 @@ if (document.getElementById("detail-status")) {
     loadJson("data/cast.json"),
     loadJson("data/schedule.json").catch(() => ({})),
     loadJson("data/next.json").catch(() => ({})),
-    loadJson("data/days.json").catch(() => []),
   ])
-    .then(([list, schedule, next, days]) => renderCastDetail(list, schedule, next, days))
+    .then(([list, schedule, next]) => renderCastDetail(list, schedule, next))
     .catch(() => {
       const s = document.getElementById("detail-status");
       if (s) s.textContent = "読み込めませんでした。時間をおいて、もう一度お試しください。";

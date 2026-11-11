@@ -277,6 +277,7 @@ td:first-child, th:first-child { text-align: left; }
   color: var(--accent-bright); font: inherit; cursor: pointer; transition: transform .2s, background .2s; }
 .apply-slot .t { font-family: var(--serif); font-size: 18px; letter-spacing: .05em; }
 .apply-slot .u { font-size: 12px; color: var(--muted); }
+.apply-slot .o { margin-top: 2px; padding: 0 7px; font-size: 11px; letter-spacing: .1em; color: var(--text); border: 1px solid var(--line); border-radius: 2px; }
 .apply-slot:hover:not(:disabled), .apply-slot:focus-visible { transform: translateY(-2px); background: var(--bg-raised); }
 .apply-slot:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
 .apply-slot.on { border: 2px solid; border-image: var(--silver) 1; background: var(--bg-raised); }
