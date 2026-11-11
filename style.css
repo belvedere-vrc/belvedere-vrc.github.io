@@ -219,6 +219,13 @@ td:first-child, th:first-child { text-align: left; }
 .thumb:hover img { opacity: .85; }
 .back-row { padding: 40px 0; }
 
+/* 特別営業のお知らせ(トップページ) */
+.special-list { list-style: none; margin: 0 auto; padding: 0; max-width: 560px; text-align: center; }
+.special-list li { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.special-list li:last-child { border-bottom: 0; }
+.special-list strong { display: block; font-size: 18px; color: var(--accent-bright); }
+.special-note { display: block; margin-top: 6px; color: var(--muted); white-space: pre-line; }
+
 /* 広告バナー。広告が無い枠は hidden のまま(場所を取らない)。「PR」の小さな表示を付ける */
 .ad-slot { max-width: 720px; margin: 0 auto; padding: 36px 0; text-align: center; }
 .ad-slot-apply { padding: 0 0 56px; }
@@ -244,12 +251,15 @@ td:first-child, th:first-child { text-align: left; }
   box-shadow: var(--lift); color: var(--text); font: inherit; cursor: pointer; text-align: inherit; transition: transform .2s, background .2s; }
 .apply-choice:hover, .apply-choice:focus-visible { transform: translateY(-2px); background: var(--bg-raised); }
 .apply-choice:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
+.apply-choice .price { display: block; margin-top: 8px; font-size: 17px; font-weight: 600; color: var(--accent-bright); letter-spacing: .04em; }
+.apply-choice .yen { display: block; margin-top: -4px; font-size: 13px; color: var(--muted); }
 .apply-choice:disabled { opacity: .4; cursor: not-allowed; transform: none; background: var(--surface); }
 .apply-choice:disabled .ph { filter: grayscale(1); }
 .apply-choice.on { border: 2px solid; border-image: var(--silver) 1; background: var(--bg-raised); }
 .apply-choice .name { font-family: var(--serif); font-size: 18px; letter-spacing: .08em; color: var(--accent-bright); }
 .apply-choice .note { font-size: 13px; line-height: 1.7; color: var(--muted); }
 .apply-choice .ph { display: block; aspect-ratio: 3 / 4; margin: -20px -20px 10px; background: var(--photo) center / cover no-repeat; }
+.apply-choice .ph.none { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 11px; letter-spacing: .2em; }
 .apply-choices.k-nominate { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 /* 時間帯の枠(30分単位)。選べない枠は灰色 */
 .apply-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin-top: 28px; }

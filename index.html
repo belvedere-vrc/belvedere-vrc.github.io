@@ -48,6 +48,13 @@
     <p class="updated" id="next-updated"></p>
   </section>
 
+  <!-- 特別営業のお知らせ。営業日時シートの type が「特別」の日(今日以降)があるときだけ出る。告知のみで、事前の予約は受け付けない -->
+  <section id="special" hidden>
+    <h2><span class="en">SPECIAL</span>特別営業のお知らせ</h2>
+    <ul class="special-list" id="special-list"></ul>
+    <p class="provisional">特別営業は、事前のご予約はお受けしていません。</p>
+  </section>
+
   <!-- 広告の枠。data/ads.json に、この場所(top)の広告があるときだけ出る。上から順に、広告シートの上の行から入る -->
   <aside class="ad-slot" data-ad="top" hidden></aside>
 

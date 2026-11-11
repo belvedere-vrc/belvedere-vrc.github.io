@@ -113,7 +113,7 @@ function renderLinks(data) {
 // data/days.json(営業日時シート)を使う。無いときは、次回開催の日付(data/next.json の date)を「通常」の1日として使う。
 function businessDays(days, next) {
   let list = (Array.isArray(days) ? days : [])
-    .filter((d) => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date))
+    .filter((d) => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date) && d.type !== "特別")   // 特別営業は、告知のみ(事前の予約は受け付けない)ので、予約の営業日には入れない
     .map((d) => {
       const day = { date: d.date, type: d.type === "時間外" ? "時間外" : "通常" };
       if (/^\d{1,2}:\d{2}$/.test(String(d.start || ""))) day.start = d.start;
@@ -126,6 +126,40 @@ function businessDays(days, next) {
   // 同じ日付に、通常営業と時間外の両方があってもよい(通常営業が先)
   const rank = (d) => (d.type === "時間外" ? 1 : 0);
   return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : rank(a) - rank(b)));
+}
+
+// 特別営業(告知のみ・事前の予約は受け付けない)の一覧。今日(日本時間)以降のものを、日付の古い順に。
+// data/days.json の type が「特別」の行。start(開始時刻)と note(説明)は、あるときだけ出す。
+function specialDays(days) {
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return (Array.isArray(days) ? days : [])
+    .filter((d) => d && d.type === "特別" && /^\d{4}-\d{2}-\d{2}$/.test(d.date) && d.date >= today)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+// トップページの「特別営業のお知らせ」。特別営業がないときは、欄ごと出さない。
+function renderSpecial(days) {
+  const section = document.getElementById("special");
+  const list = document.getElementById("special-list");
+  if (!section || !list) return;
+  const items = specialDays(days);
+  if (items.length === 0) return;
+  list.textContent = "";
+  items.forEach((d) => {
+    const [y, m, dd] = d.date.split("-").map(Number);
+    const li = document.createElement("li");
+    const date = document.createElement("strong");
+    date.textContent = y + "年" + m + "月" + dd + "日(" + WEEKDAYS[new Date(Date.UTC(y, m - 1, dd)).getUTCDay()] + ")" + (d.start ? " " + d.start + "〜" : "");
+    li.appendChild(date);
+    if (d.note) {
+      const note = document.createElement("span");
+      note.className = "special-note";
+      note.textContent = d.note;
+      li.appendChild(note);
+    }
+    list.appendChild(li);
+  });
+  section.hidden = false;
 }
 
 // 申し込み画面(サイト内の apply.html)へつなぐURL。params で、キャストや日付を最初から選んだ状態で開く。
@@ -576,6 +610,10 @@ loadJson("data/next.json")
     renderLinks(data);
   })
   .catch(() => {});
+
+if (document.getElementById("special")) {
+  loadJson("data/days.json").then(renderSpecial).catch(() => {});
+}
 
 if (document.getElementById("video-list")) {
   loadJson("data/videos.json").then(renderVideos).catch(() => {});

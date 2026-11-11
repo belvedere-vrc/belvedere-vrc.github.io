@@ -3,12 +3,12 @@
 //
 // 流れ: 指名の有無 →(指名ありなら)キャスト → 営業日 → 時間帯の枠 → 部屋 → お名前 → VRChatのプロフィールURL → XのプロフィールURL → メールアドレス → 確認 → 送信
 //  ・営業日は、data/days.json(営業日時シート)。種類が「時間外」の日は、選べる部屋が変わり、手数料の案内が出る。
-//  ・通常営業は、予約に関係なく、固定の開催時刻(設定 regularStart。営業日時シートの start で日ごとに変えることも可)に開催する。
-//    その前後1時間以内の開始は、開始時刻ちょうどを除いて、全員が一律で選べない
-//    (21:00開催なら、20:00・20:30・21:30・22:00が不可。21:00と、それより外の時刻は選べる)。時間外の営業・時刻が無い日は、かけない。
-//  ・同じ日付に、通常営業と時間外の両方がある日は、営業日の選択肢に2つ出る(時間外には「（時間外）」が付く)。部屋・手数料・前後の予約不可は、それぞれ別。
-//    → 営業日(日付)を決めれば、予約できない日時も決まる。
-//  ・枠は30分単位。キャストの出勤予定(data/schedule.json)の時間帯の中だけ選べる。
+//  ・通常営業(通常回)は、予約に関係なく、固定の開催時刻(設定 regularStart。営業日時シートの start で日ごとに変えることも可)に開催する。
+//    通常回の予約で選べる時間は、その開催時刻の枠だけ(21:00開催なら、21:00だけ)。時間外の営業・開催時刻が無い日は、この制限をかけない。
+//  ・同じ日付に、通常営業と時間外の両方がある日は、営業日の選択肢に2つ出る(時間外には「（時間外）」が付く)。部屋・手数料・選べる時間は、それぞれ別。
+//  ・料金は、お部屋を選ぶ画面と確認画面に出す(設定の price・nominationFee・overtimeFee。指名ありは指名料、時間外は手数料を足した合計)。
+//  ・枠は30分単位(時間外の営業)。キャストの出勤予定(data/schedule.json)の時間帯の中だけ選べる。
+//  ・選んだ時点で次の画面に進む画面(指名・キャスト・営業日・時間帯・部屋)には、「次へ」ボタンを出さない。
 //  ・指名ありは、同じキャストのすでにある予約の前後1時間(開始が1時間以内=21:00の予約なら、20:00〜22:00開始)の枠を、全員が選べない
 //    (data/booked.json の cast。接客60分＋余裕30分=90分の重なりと同じ結果)。選べる枠が無い日は、そのキャストを選べない。
 //  ・予約した人は、その予約の時刻になるまで、次のお申し込みができない(このブラウザーでの目安。本当の判定は、名前とメールで、予約セッションのGASが行う)。
@@ -21,7 +21,7 @@
   if (!root) return;
 
   const FIELD_KEYS = ["plan", "cast", "date", "slot", "name", "vrchat", "x", "email"];
-  const SLOT = Object.assign({ unit: 30, service: 60, block: 90, anyReserve: 2, eventGap: 60 }, cfg.slot || {});
+  const SLOT = Object.assign({ unit: 30, service: 60, block: 90, anyReserve: 2 }, cfg.slot || {});
   const SUFFIX = cfg.nominationSuffix || "＋指名";
 
   // answers: date(2026-12-05) / type("通常"か"時間外"。同じ日付に両方ある日があるので、日付とあわせて営業日として選ぶ) / room / nominate("yes"|"no") / cast(名前) / castId / slot(開始の分) / name / email
@@ -73,19 +73,17 @@
   /* ---------- 営業日・出勤・枠 ---------- */
   // いま選んでいる営業の種類。同じ日付に、通常営業と時間外の両方がある日があるので、日付だけでは決まらない(営業日の選択で決める)。
   const typeOf = () => answers.type || "通常";
-  // 通常営業は、予約に関係なく、営業日時シートの start の時刻に開催する。その前後 eventGap 分(1時間)以内の開始は、
-  // 開始時刻ちょうどを除いて、全キャスト・全員が一律で、予約できない(21:00開催なら、20:00・20:30・21:30・22:00)。
+  // 通常営業(通常回)は、予約に関係なく、決まった時刻に開催する。通常回の予約で選べるのは、その開催時刻の枠だけ
+  // (21:00開催なら、21:00だけ。前後の時刻は選べない)。全キャスト・全員が一律。
   // 開催時刻は、基本的に固定(設定 regularStart)。営業日時シートの start に書いた日だけ、その時刻を使う(例外の日用)。
-  // 時刻がどちらにも無い日、時間外の営業は、かけない(同じ日に、通常営業と時間外の両方がある場合も、時間外の営業にはかけない)。
-  function eventBlocked(iso, s, type) {
-    if (type !== "通常") return false;
+  // 開催時刻がどちらにも無い日と、時間外の営業は、この制限をかけない(時間外は、出勤の時間帯の中で、30分刻みで選べる)。
+  // 戻り値: 開催時刻(0時からの分)。制限をかけないときは null。
+  function regularMin(iso, type) {
+    if (type !== "通常") return null;
     const d = bizDays.find((x) => x.date === iso && x.type === "通常");
     const start = d && (d.start || cfg.regularStart);
-    if (!start) return false;
-    const m = String(start).match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return false;
-    const t = toMin(m[1], m[2]);
-    return s !== t && Math.abs(s - t) <= SLOT.eventGap;
+    const m = start && String(start).match(/^(\d{1,2}):(\d{2})$/);
+    return m ? toMin(m[1], m[2]) : null;
   }
 
   // 出勤予定の文字(「20:00-23:30」)を、分の範囲にする。時刻が読めないもの(「出勤」だけ)は、枠を作れないので、除く
@@ -143,8 +141,17 @@
     const lo = Math.min.apply(null, windows.map((w) => w.s));
     const hi = Math.max.apply(null, windows.map((w) => w.e));
 
+    // 通常回は、開催時刻の枠だけ(出勤の時間帯におさまっているときだけ)。それ以外は、30分刻みの枠。
+    const only = regularMin(date, type);
+    const starts = [];
+    if (only !== null) {
+      if (only >= lo && only + SLOT.service <= hi) starts.push(only);
+    } else {
+      for (let s = Math.ceil(lo / SLOT.unit) * SLOT.unit; s + SLOT.service <= hi; s += SLOT.unit) starts.push(s);
+    }
+
     const out = [];
-    for (let s = Math.ceil(lo / SLOT.unit) * SLOT.unit; s + SLOT.service <= hi; s += SLOT.unit) {
+    for (const s of starts) {
       let reason = "";
       let inShift;
       if (castId) {
@@ -155,7 +162,6 @@
       }
       if (!inShift) reason = "out";
       else if (date < today || (date === today && s <= nowMin)) reason = "past";
-      else if (eventBlocked(date, s, type)) reason = "event";
       else if (castId ? bookedMin.some((b) => s < b + SLOT.block && b < s + SLOT.block) : !anyFits(date, s, anyMin)) reason = "booked";
       out.push({ start: s, label: hhmm(s) + "-" + hhmm(s + SLOT.service), reason });
     }
@@ -165,6 +171,7 @@
 
   /* ---------- 流れ ---------- */
   const nominated = () => answers.nominate === "yes";
+  const ALL_STEPS = ["nominate", "cast", "date", "slot", "room", "name", "vrchat", "x", "email", "confirm"];
   const steps = () => {
     // 最初に、指名の有無とキャストを決める。キャストを先に選ぶので、営業日は、そのキャストが出勤する日だけが出る。
     const s = [];
@@ -211,16 +218,17 @@
 
   // 画面の枠(進み具合 → 本体 → 戻る/次へ)
   function frame(title, lead, body, opts) {
-    const list = steps();
+    // 進み具合は、最初から全部で10。画面ごとに番号が決まっている(指名なし・キャスト指定済みで飛ばす画面の番号は、とばす)
+    const no = ALL_STEPS.indexOf(steps()[step]) + 1;
     const wrap = el("div", "apply-step");
 
     const bar = el("div", "apply-progress");
     bar.setAttribute("aria-hidden", "true");
     const fill = el("span");
-    fill.style.width = Math.round(((step + 1) / list.length) * 100) + "%";
+    fill.style.width = Math.round((no / ALL_STEPS.length) * 100) + "%";
     bar.appendChild(fill);
     wrap.appendChild(bar);
-    wrap.appendChild(el("p", "apply-count", "STEP " + (step + 1) + " / " + list.length));
+    wrap.appendChild(el("p", "apply-count", "STEP " + no + " / " + ALL_STEPS.length));
 
     // キャストや日付を指定して来たときは、選ばれている内容を見せて、やり直せるようにする
     if (castLocked || dateLocked) {
@@ -292,9 +300,15 @@
         const ph = el("span", "ph");
         ph.style.backgroundImage = 'url("' + encodeURI(o.image) + '")';
         b.appendChild(ph);
+      } else if (kind === "cast") {
+        // 指名するキャストを選ぶ画面は、顔写真(キャスト紹介シートの image)を出す。写真がないキャストは、同じ大きさの枠だけ出す
+        b.appendChild(el("span", "ph none", "NO IMAGE"));
       }
       b.appendChild(el("span", "name", o.label || o.value));
       if (o.note) b.appendChild(el("span", "note", o.note));
+      if (o.price) b.appendChild(el("span", "price", o.price));
+      if (o.yen) b.appendChild(el("span", "yen", "（" + o.yen + "）"));
+      if (o.priceNote) b.appendChild(el("span", "note", o.priceNote));
       if (o.disabled) { b.disabled = true; grid.appendChild(b); return; }
       b.addEventListener("click", () => {
         onPick(o);
@@ -305,10 +319,8 @@
       });
       grid.appendChild(b);
     });
-    const { wrap, err } = frame(title, lead, grid, {
-      onNext: (e) => { if (selected === undefined && !grid.querySelector(".on")) e.textContent = "ひとつお選びください。"; else advance(); },
-    });
-    return wrap;
+    // 選んだ時点で次の画面に進むので、「次へ」ボタンは出さない(選び直しは、もう一度、選択肢を押す)
+    return frame(title, lead, grid, { next: false }).wrap;
   }
 
   // 時間帯の枠を選ぶ画面
@@ -333,7 +345,6 @@
         b.disabled = true;
         b.classList.add("off", "r-" + s.reason);
         if (s.reason === "booked") b.setAttribute("title", "ほかのご予約があるため、選べません");
-        if (s.reason === "event") b.setAttribute("title", "営業の開始の前後のため、選べません");
       } else {
         const on = answers.slot === s.start;
         b.setAttribute("aria-pressed", String(on));
@@ -350,11 +361,9 @@
     });
     const body = el("div");
     body.appendChild(grid);
-    body.appendChild(el("p", "apply-fine", "灰色の枠は、出勤の時間外か、ほかのご予約のため、選べません。"));
+    if (list.length > 1) body.appendChild(el("p", "apply-fine", "灰色の枠は、出勤の時間外か、ほかのご予約のため、選べません。"));
     if (!castId) body.appendChild(el("p", "apply-fine", "指名なしのお席は、時間帯ごとに受付できる数に限りがあります。"));
-    return frame("ご希望の時間帯をお選びください", lead, body, {
-      onNext: (e) => { if (answers.slot === undefined) e.textContent = "ひとつお選びください。"; else advance(); },
-    }).wrap;
+    return frame("ご希望の時間帯をお選びください", lead, body, { next: false }).wrap;   // 選んだ時点で次へ進むので、「次へ」は出さない
   }
 
   // 書く画面(下線だけの入力欄)
@@ -381,6 +390,22 @@
     return wrap;
   }
 
+  /* ---------- お名前のエスケープ(保存する前に、必ず通す) ---------- */
+  // お名前は自由に書ける欄なので、台帳(スプレッドシート)やメール、名簿の画面で、式やHTMLとして働かないようにしてから送る。
+  //  1. 制御文字と、見えない文字(ゼロ幅・文字の向きを変える記号)を取り除く
+  //  2. HTMLの記号を、文字参照に置き換える( & → &amp;  < → &lt;  > → &gt;  " → &quot;  ' → &#39; )
+  //  3. 先頭が = + - @ のときは、頭に ' を付ける(スプレッドシートで、式として扱われないように)
+  // 確認画面には、入力されたままの名前を見せる(送る値だけを変える)。
+  // この画面を通さずに、フォームへ直接送られた回答には効かないので、受け取る側(予約のGAS)でも、同じ処理をする。
+  const escapeName = (v) => {
+    let s = String(v == null ? "" : v)
+      .replace(/[\u0000-\u001F\u007F​-‏‪-‮⁠-⁤﻿]/g, "")
+      .trim()
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return s;
+  };
+
   /* ---------- プロフィールのURL(VRChat・X) ---------- */
   // 入力された文字を、決まった形のURLにする。読めないときは、空の文字を返す。
   //  ・VRChat: https://vrchat.com/home/user/usr_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (ユーザーのプロフィールページ)
@@ -394,6 +419,26 @@
     return m && !/^(home|i|explore|search|settings|messages|notifications|intent|share|compose)$/i.test(m[1]) ? "https://x.com/" + m[1] : "";
   };
 
+  /* ---------- 料金 ---------- */
+  // 設定(apply-config.js): 部屋ごとの price(予約料金)・nominationFee(指名料)と、時間外の overtimeFee(どれも、数字。単位はクレジット)。
+  // price が数字で入っていない部屋は、料金を出さない。
+  const money = (n) => Number(n).toLocaleString("ja-JP") + "クレジット";
+  // 日本円に換算した目安(「約1,880円」)。設定 yenRate: { credits: 600, yen: ○○ }(○クレジットを買うときの円の価格)から計算し、10円単位に丸める。
+  // 設定が入っていないあいだは、空の文字(円は出さない)。お支払いはクレジットなので、円は、あくまで目安として添える。
+  const yenText = (credits) => {
+    const r = cfg.yenRate;
+    if (!r || !(Number(r.credits) > 0) || !(Number(r.yen) > 0)) return "";
+    return "約" + (Math.round((credits * Number(r.yen)) / Number(r.credits) / 10) * 10).toLocaleString("ja-JP") + "円";
+  };
+  const roomOf = (value) => rooms.find((r) => r.value === value);
+  function priceOf(room, withNomination, type) {
+    if (!room || typeof room.price !== "number") return null;
+    const parts = [["予約料金", room.price]];
+    if (withNomination && typeof room.nominationFee === "number") parts.push(["指名料", room.nominationFee]);
+    if (type === "時間外" && typeof cfg.overtimeFee === "number") parts.push(["時間外手数料", cfg.overtimeFee]);
+    return { parts, total: parts.reduce((a, p) => a + p[1], 0) };
+  }
+
   const slotText = () => (answers.slot === undefined ? "" : hhmm(answers.slot) + "-" + hhmm(answers.slot + SLOT.service));
   const dateText = () => dateLabel(answers.date) + (typeOf() === "時間外" ? "（時間外）" : "");
 
@@ -402,7 +447,13 @@
     const rows = [["希望の営業日", dateText()], ["区分", planValue()]];
     if (nominated()) rows.push(["指名キャスト", answers.cast]);
     rows.push(["希望の時間帯", slotText()]);
-    if (typeOf() === "時間外" && cfg.overtimeFee) rows.push(["時間外手数料", cfg.overtimeFee]);
+    const pr = priceOf(roomOf(answers.room), nominated(), typeOf());
+    if (pr) {
+      pr.parts.forEach(([k, v]) => rows.push([k, money(v)]));
+      rows.push(["合計", money(pr.total) + (yenText(pr.total) ? "（" + yenText(pr.total) + "）" : "")]);
+    } else if (typeOf() === "時間外" && cfg.overtimeFee) {
+      rows.push(["時間外手数料", typeof cfg.overtimeFee === "number" ? money(cfg.overtimeFee) : cfg.overtimeFee]);
+    }
     rows.push(["お名前", answers.name], ["VRChatのプロフィール", normalizeVrchat(answers.vrchat)], ["Xのプロフィール", normalizeX(answers.x)], ["メールアドレス", answers.email]);
     rows.forEach(([k, v]) => {
       const d = el("div");
@@ -413,7 +464,8 @@
 
     const body = el("div");
     body.appendChild(dl);
-    if (typeOf() === "時間外" && cfg.overtimeNote) body.appendChild(el("p", "apply-fine", cfg.overtimeNote));
+    if (typeOf() === "時間外" && cfg.overtimeNote && !pr) body.appendChild(el("p", "apply-fine", cfg.overtimeNote));
+    if (nominated() && !pr) body.appendChild(el("p", "apply-fine", "指名料が加算されます。"));   // 料金が設定されているときは、内訳の行に出る
     // いたずら送信よけ(人には見えない欄。入っていたら、送らない)
     const trap = el("input", "apply-trap");
     trap.type = "text"; trap.name = "website"; trap.tabIndex = -1; trap.autocomplete = "off";
@@ -443,7 +495,7 @@
     body.set(cfg.fields.cast, nominated() ? answers.cast : "");
     body.set(cfg.fields.date, dateText());   // 時間外の営業には「（時間外）」が付く(同じ日に、通常営業と時間外の両方がある日を見分けるため)
     body.set(cfg.fields.slot, slotText());
-    body.set(cfg.fields.name, answers.name);
+    body.set(cfg.fields.name, escapeName(answers.name));   // お名前は、必ずエスケープしてから送る
     body.set(cfg.fields.vrchat, normalizeVrchat(answers.vrchat));
     body.set(cfg.fields.x, normalizeX(answers.x));
     body.set(cfg.fields.email, answers.email);
@@ -525,21 +577,31 @@
       const today = todayIso();
       const options = bizDays
         .filter((d) => d.date >= today)
-        .filter((d) => !answers.castId || castFree(answers.castId, d.date, d.type))
-        .map((d) => ({ value: d.date + "|" + d.type, date: d.date, type: d.type, label: dateLabel(d.date) + (d.type === "時間外" ? "（時間外）" : ""), note: d.type === "時間外" ? "時間外の営業です。" + (cfg.overtimeNote || "") : "" }));
+        // 接客できるキャストがいない日(出勤がない・枠が残っていない日)は、出さない。指名ありは、そのキャストで選べる日だけ。
+        .filter((d) => (answers.castId ? castFree(answers.castId, d.date, d.type) : hasOpenSlot(d.date, "", d.type)))
+        .map((d) => ({ value: d.date + "|" + d.type, date: d.date, type: d.type, label: dateLabel(d.date) + (d.type === "時間外" ? "（時間外）" : ""), note: d.type === "時間外" ? (cfg.overtimeNote || "") : "" }));
       node = choiceStep("date", "ご希望の営業日をお選びください", dateNote, options, answers.date ? answers.date + "|" + typeOf() : undefined,
         (o) => { answers.type = o.type; setAnswer("date", o.date); },
         castLocked ? answers.cast + "は、お申し込みできる営業日がありません(枠が埋まっています)。「選び直す」から、別のキャストや指名なしをお選びください。"
           : answers.castId ? answers.cast + "は、お申し込みできる営業日がありません(枠が埋まっています)。「戻る」から、別のキャストや指名なしをお選びください。"
           : "お申し込みできる営業日は、調整中です。決まり次第、受け付けます。");
     } else if (name === "room") {
-      const options = roomsFor(typeOf()).map((r) => ({ value: r.value, note: r.note }));
-      node = choiceStep("room", "ご希望のお部屋をお選びください", typeOf() === "時間外" ? "時間外の営業は、スイートのみのご案内です。" : "",
+      // お部屋を選ぶときに、料金を出す(指名ありなら指名料を足した合計、時間外なら時間外手数料も足した合計)
+      const options = roomsFor(typeOf()).map((r) => {
+        const p = priceOf(r, nominated(), typeOf());
+        return {
+          value: r.value, note: r.note,
+          price: p ? money(p.total) : "",
+          yen: p ? yenText(p.total) : "",
+          priceNote: p && p.parts.length > 1 ? p.parts.map((x) => x[0] + " " + x[1].toLocaleString("ja-JP")).join(" ＋ ") : "",
+        };
+      });
+      node = choiceStep("room", "ご希望のお部屋をお選びください", options.some((o) => o.yen) ? (cfg.yenNote || "") : "",
         options, answers.room, (o) => setAnswer("room", o.value), "お部屋は準備中です。");
     } else if (name === "nominate") {
-      node = choiceStep("nominate", "指名をされますか？", "指名は、1回のご予約につき、1人のキャストにお願いします。", [
-        { value: "no", label: "指名なし", note: "担当のキャストは、運営が決めます。" },
-        { value: "yes", label: "指名する", note: "お好きなキャストを、1人、指名できます。" },
+      node = choiceStep("nominate", "指名をされますか？", "", [
+        { value: "no", label: "指名なし" },
+        { value: "yes", label: "指名あり", note: "指名料が加算されます。" },
       ], answers.nominate, (o) => setAnswer("nominate", o.value), "");
     } else if (name === "cast") {
       // 営業日より先に選ぶので、今日以降の営業日のどれかに出勤するキャストを出す(枠がすべて埋まっているキャストは、灰色)
@@ -552,7 +614,7 @@
       node = slotStep();
     } else if (name === "name") {
       node = textStep("name", "お名前を教えてください", "VRChatでの表示名をご記入ください。", { placeholder: "お名前", autocomplete: "nickname" },
-        (v) => (v ? (v.length > 100 ? "100文字以内でご記入ください。" : "") : "お名前をご記入ください。"));
+        (v) => (escapeName(v) ? (v.length > 100 ? "100文字以内でご記入ください。" : "") : "お名前をご記入ください。"));   // 見えない文字だけの名前は、空として扱う
     } else if (name === "vrchat") {
       node = textStep("vrchat", "VRChatのプロフィールのURLを教えてください", "VRChatのサイトで、ご自身のプロフィールページを開き、そのURLをご記入ください(例 https://vrchat.com/home/user/usr_…)。", { type: "text", placeholder: "https://vrchat.com/home/user/usr_...", autocomplete: "off", inputmode: "url" },
         (v) => (normalizeVrchat(v) ? "" : "VRChatのプロフィールのURLをご確認ください(https://vrchat.com/home/user/usr_… の形です)。"));
