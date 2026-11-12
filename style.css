@@ -291,10 +291,17 @@ td:first-child, th:first-child { text-align: left; }
 .apply-nav { display: flex; align-items: center; justify-content: center; gap: 24px; margin-top: 20px; }
 .apply-back { padding: 8px 4px; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; }
 .apply-back:hover { color: var(--accent-bright); }
+.apply-textarea { width: 100%; max-width: 560px; min-height: 160px; padding: 14px; background: rgba(255, 255, 255, .03); color: var(--text); font: inherit; line-height: 1.8; resize: vertical;
+  border: 1px solid var(--line); border-radius: 2px; }
+.apply-textarea:focus { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+.apply-choices.k-survey { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); max-width: 640px; margin-left: auto; margin-right: auto; }
 .apply-summary { max-width: 480px; margin: 0 auto 20px; text-align: left; }
 .apply-summary > div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .apply-summary dt { color: var(--muted); flex: none; }
 .apply-summary dd { margin: 0; color: var(--accent-bright); text-align: right; overflow-wrap: anywhere; }
+.apply-summary.stack { max-width: 560px; }
+.apply-summary.stack > div { flex-direction: column; gap: 4px; }
+.apply-summary.stack dd { text-align: left; }
 .apply-fine { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 .apply-empty { margin: 0; padding: 32px 0; color: var(--muted); text-align: center; }
 .apply-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
