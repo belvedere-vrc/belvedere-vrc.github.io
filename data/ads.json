@@ -8,5 +8,15 @@
     "image": "images/chuo.jpg?v=24881e8",
     "url": "https://melchabox.booth.pm/",
     "alt": ""
+  },
+  {
+    "places": [
+      "top",
+      "cast",
+      "apply"
+    ],
+    "image": "https://pbs.twimg.com/profile_banners/990501450974281729/1710762841/1500x500",
+    "url": "https://x.com/lovegts10000",
+    "alt": ""
   }
 ]
