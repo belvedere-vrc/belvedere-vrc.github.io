@@ -241,6 +241,20 @@ td:first-child, th:first-child { text-align: left; }
 .ad { position: relative; display: block; border: 1px solid var(--line); background: var(--photo); }
 .ad:hover img { opacity: .88; }
 .ad img { display: block; width: 100%; height: auto; transition: opacity .2s; }
+/* 広告が2つ以上のとき: 横にスクロール(スワイプ)で切り替える */
+.ad-carousel { position: relative; }
+.ad-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.ad-track::-webkit-scrollbar { display: none; }
+.ad-slide { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+.ad-dots { display: flex; justify-content: center; gap: 4px; margin-top: 6px; }
+.ad-dot { width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; position: relative; }
+.ad-dot::before { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; border: 1px solid var(--muted); }
+.ad-dot[aria-current="true"]::before { background: var(--text); border-color: var(--text); }
+.ad-arrow { position: absolute; top: calc(50% - 16px); width: 32px; height: 44px; padding: 0 0 4px; border: 1px solid var(--line); background: rgba(19, 13, 10, .72); color: var(--text); font-size: 24px; line-height: 1; cursor: pointer; transform: translateY(-50%); }
+.ad-prev { left: 0; }
+.ad-next { right: 0; }
+@media (hover: none) { .ad-arrow { display: none; } }
+@media (prefers-reduced-motion: reduce) { .ad-track { scroll-behavior: auto; } }
 .ad-label { position: absolute; top: 6px; left: 6px; padding: 1px 8px; font-size: 11px; letter-spacing: .12em; color: var(--text); background: rgba(19, 13, 10, .78); border: 1px solid var(--line); }
 
 /* お申し込み画面(apply.html)。フォームに見えないよう、1問ずつ、カードと下線の入力欄で進める */
@@ -260,6 +274,14 @@ td:first-child, th:first-child { text-align: left; }
   box-shadow: var(--lift); color: var(--text); font: inherit; cursor: pointer; text-align: inherit; transition: transform .2s, background .2s; }
 .apply-choice:hover, .apply-choice:focus-visible { transform: translateY(-2px); background: var(--bg-raised); }
 .apply-choice:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
+.lottery-section { padding: 0 16px; }
+.lottery { max-width: 480px; margin: 0 auto 28px; padding: 18px 20px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); text-align: left; font-size: 14px; line-height: 1.8; }
+.lottery h2 { margin: 0 0 8px; font-size: 16px; line-height: 1.6; }
+.lottery p { margin: 0 0 8px; }
+.lottery ul { margin: 0; padding: 0; list-style: none; }
+.lottery li { margin: 0 0 6px; padding-left: 0; }
+.lottery .fine { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+.lottery strong { color: var(--text); font-weight: 600; }
 .apply-notice { max-width: 480px; margin: 20px auto 0; padding: 10px 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); color: var(--text); font-size: 14px; line-height: 1.8; text-align: left; }
 .apply-choice .price { display: block; margin-top: 8px; font-size: 17px; font-weight: 600; color: var(--accent-bright); letter-spacing: .04em; }
 .apply-choice .yen { display: block; margin-top: -4px; font-size: 13px; color: var(--muted); }

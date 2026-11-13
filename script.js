@@ -560,39 +560,121 @@ function renderSchedule(days, hrefFor) {
 }
 
 // 広告バナー。data/ads.json は [{ places: ["top"|"cast"|"apply", …], image, url, alt, from, to }]。
-// ページにある枠(data-ad="場所")に、その場所の広告を、シートの上の行から順に入れる(1枠に1つ。広告が足りない枠は出さない)。
+// 各ページに、広告の枠(data-ad="場所")は1か所。その場所の広告を、シートの上の行から順に、横に並べる。
+// 2つ以上あるときは、横にスクロール(スワイプ)で切り替えられる(下の「・」と、左右の矢印でも切り替えられる)。
 // 掲載期間(from〜to、日本時間の日付)を過ぎた広告は、サイトを更新しなくても出なくなる。
+function adLink(ad) {
+  const link = document.createElement("a");
+  link.className = "ad";
+  link.href = ad.url;
+  if (/^https?:\/\//i.test(ad.url)) {
+    link.target = "_blank";
+    link.rel = "noopener noreferrer sponsored";
+  }
+  const img = document.createElement("img");
+  img.src = encodeURI(ad.image);
+  img.alt = ad.alt || "広告";
+  img.loading = "lazy";
+  const label = document.createElement("span");
+  label.className = "ad-label";
+  label.textContent = "PR";
+  link.append(img, label);
+  return link;
+}
+
+function adCarousel(ads) {
+  const wrap = document.createElement("div");
+  wrap.className = "ad-carousel";
+  wrap.setAttribute("role", "region");
+  wrap.setAttribute("aria-roledescription", "carousel");
+  wrap.setAttribute("aria-label", "広告");
+  const track = document.createElement("div");
+  track.className = "ad-track";
+  const slides = ads.map((ad, i) => {
+    const s = document.createElement("div");
+    s.className = "ad-slide";
+    s.setAttribute("role", "group");
+    s.setAttribute("aria-label", (i + 1) + " / " + ads.length);
+    s.appendChild(adLink(ad));
+    track.appendChild(s);
+    return s;
+  });
+  wrap.appendChild(track);
+
+  const dots = document.createElement("div");
+  dots.className = "ad-dots";
+  const btns = slides.map((s, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ad-dot";
+    b.setAttribute("aria-label", "広告 " + (i + 1) + " を見る");
+    b.addEventListener("click", () => go(i));
+    dots.appendChild(b);
+    return b;
+  });
+  const prev = document.createElement("button");
+  const next = document.createElement("button");
+  [[prev, "ad-arrow ad-prev", "前の広告", "‹", -1], [next, "ad-arrow ad-next", "次の広告", "›", 1]].forEach((a) => {
+    a[0].type = "button";
+    a[0].className = a[1];
+    a[0].setAttribute("aria-label", a[2]);
+    a[0].textContent = a[3];
+    a[0].addEventListener("click", () => go(cur() + a[4]));
+    wrap.appendChild(a[0]);
+  });
+  wrap.appendChild(dots);
+
+  function cur() { return Math.round(track.scrollLeft / (track.clientWidth || 1)); }
+  function go(i) {
+    const n = (i + slides.length) % slides.length;
+    track.scrollTo({ left: n * track.clientWidth, behavior: "smooth" });
+  }
+  function mark() {
+    const c = Math.min(slides.length - 1, Math.max(0, cur()));
+    btns.forEach((b, i) => b.setAttribute("aria-current", i === c ? "true" : "false"));
+  }
+  track.addEventListener("scroll", mark, { passive: true });
+  mark();
+
+  // 一定の時間(5秒)ごとに、次の広告へ自動で切り替える。
+  // 指やマウスが乗っているとき・キーボードで操作中・画面の外にあるとき・タブが裏のときは、止める。「動きを減らす」設定のときは、自動で切り替えない
+  const AD_INTERVAL = 5000;
+  const hold = { pointer: false, focus: false, away: false, touch: false };
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let last = Date.now();
+  if (!reduced) {
+    wrap.addEventListener("mouseenter", () => { hold.pointer = true; });
+    wrap.addEventListener("mouseleave", () => { hold.pointer = false; last = Date.now(); });
+    wrap.addEventListener("focusin", () => { hold.focus = true; });
+    wrap.addEventListener("focusout", () => { hold.focus = false; last = Date.now(); });
+    track.addEventListener("touchstart", () => { hold.touch = true; }, { passive: true });
+    ["touchend", "touchcancel"].forEach((t) => track.addEventListener(t, () => { hold.touch = false; last = Date.now(); }, { passive: true }));
+    // 自分で切り替えたら、そこから数え直す
+    [prev, next, dots].forEach((n) => n.addEventListener("click", () => { last = Date.now(); }));
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver((es) => { hold.away = !es[es.length - 1].isIntersecting; last = Date.now(); }).observe(wrap);
+    }
+    setInterval(() => {
+      if (document.hidden || hold.pointer || hold.focus || hold.away || hold.touch) return;
+      if (Date.now() - last < AD_INTERVAL - 200) return;
+      last = Date.now();
+      go(cur() + 1);
+    }, 1000);
+  }
+  return wrap;
+}
+
 function renderAds(list) {
   if (!Array.isArray(list)) return;
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const live = list.filter((a) =>
     a && Array.isArray(a.places) && a.image && a.url && isSafeUrl(a.image) && isSafeUrl(a.url) &&
     (!a.from || a.from <= today) && (!a.to || today <= a.to));
-  const used = {};
   document.querySelectorAll("[data-ad]").forEach((slot) => {
-    const place = slot.dataset.ad;
-    const n = used[place] || 0;
-    used[place] = n + 1;
-    const ad = live.filter((a) => a.places.includes(place))[n];
-    if (!ad) return;
-
-    const link = document.createElement("a");
-    link.className = "ad";
-    link.href = ad.url;
-    if (/^https?:\/\//i.test(ad.url)) {
-      link.target = "_blank";
-      link.rel = "noopener noreferrer sponsored";
-    }
-    const img = document.createElement("img");
-    img.src = encodeURI(ad.image);
-    img.alt = ad.alt || "広告";
-    img.loading = "lazy";
-    const label = document.createElement("span");
-    label.className = "ad-label";
-    label.textContent = "PR";
-    link.append(img, label);
+    const ads = live.filter((a) => a.places.includes(slot.dataset.ad));
+    if (!ads.length) return;
     slot.textContent = "";
-    slot.appendChild(link);
+    slot.appendChild(ads.length === 1 ? adLink(ads[0]) : adCarousel(ads));
     slot.hidden = false;
   });
 }
